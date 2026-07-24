@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
+import Logo from "@/components/Logo";
 import { api, setToken } from "@/lib/api";
 import type { Teacher } from "@/lib/types";
 
@@ -34,6 +35,9 @@ export default function LoginPage() {
         onSubmit={handleSubmit}
         className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900"
       >
+        <div className="mb-6 flex justify-center">
+          <Logo size="sm" />
+        </div>
         <h1 className="mb-1 text-2xl font-semibold text-slate-900 dark:text-white">Welcome back</h1>
         <p className="mb-6 text-sm text-slate-500 dark:text-slate-400">Log in to your LISM AI Classroom account.</p>
         {error && (

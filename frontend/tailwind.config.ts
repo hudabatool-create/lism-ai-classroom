@@ -6,12 +6,18 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // Sampled from the Liwa International School logo mark (public/logo.png).
         brand: {
-          50: "#eef2ff",
-          100: "#e0e7ff",
-          500: "#6366f1",
-          600: "#4f46e5",
-          700: "#4338ca",
+          50: "#f2fbfe",
+          100: "#e6f8fd",
+          200: "#bfedfb",
+          300: "#99e1f8",
+          400: "#4dcbf2",
+          500: "#00b5ed",
+          600: "#009ac9",
+          700: "#007fa6",
+          800: "#006482",
+          900: "#00485f",
         },
       },
     },

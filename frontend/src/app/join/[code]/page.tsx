@@ -2,6 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
+import Logo from "@/components/Logo";
 import { api } from "@/lib/api";
 
 interface JoinInfo {
@@ -92,6 +93,9 @@ export default function JoinPage() {
           onSubmit={handleJoin}
           className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-8 dark:border-slate-800 dark:bg-slate-900"
         >
+          <div className="mb-6 flex justify-center">
+            <Logo size="sm" />
+          </div>
           <h1 className="mb-1 text-xl font-semibold text-slate-900 dark:text-white">{info.activity.title}</h1>
           <p className="mb-6 text-sm text-slate-500 dark:text-slate-400">Enter your details to join.</p>
           <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Name</label>

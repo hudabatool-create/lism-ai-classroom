@@ -1,9 +1,11 @@
 import Link from "next/link";
+import Logo from "@/components/Logo";
 
 export default function HomePage() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 text-center dark:bg-slate-950">
-      <p className="text-sm font-semibold uppercase tracking-wide text-brand-600">LISM AI Classroom</p>
+      <Logo size="lg" />
+      <p className="mt-4 text-sm font-semibold uppercase tracking-wide text-brand-600">LISM AI Classroom</p>
       <h1 className="mt-2 max-w-2xl text-4xl font-bold text-slate-900 dark:text-white">
         Create. Engage. Monitor. Analyze. Inspire.
       </h1>

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import Logo from "@/components/Logo";
 import { clearToken } from "@/lib/api";
 
 const NAV_ITEMS = [
@@ -29,8 +30,8 @@ export default function Sidebar() {
     <aside className="flex h-screen w-64 shrink-0 flex-col justify-between border-r border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
       <div>
         <div className="px-6 py-6">
-          <p className="text-lg font-semibold text-slate-900 dark:text-white">LISM AI Classroom</p>
-          <p className="text-xs text-slate-500 dark:text-slate-400">Create. Engage. Monitor. Analyze. Inspire.</p>
+          <Logo size="sm" />
+          <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">Create. Engage. Monitor. Analyze. Inspire.</p>
         </div>
         <nav className="flex flex-col gap-1 px-3">
           {NAV_ITEMS.map((item) => {
