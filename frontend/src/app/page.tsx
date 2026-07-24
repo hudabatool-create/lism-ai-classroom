@@ -27,6 +27,12 @@ export default function HomePage() {
           Sign up
         </Link>
       </div>
+      <p className="mt-6 text-sm text-slate-500 dark:text-slate-400">
+        Joining a class activity?{" "}
+        <Link href="/join" className="font-medium text-brand-600 hover:underline">
+          Enter your activity code
+        </Link>
+      </p>
     </main>
   );
 }

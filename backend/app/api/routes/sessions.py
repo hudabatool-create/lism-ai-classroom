@@ -48,9 +48,12 @@ def get_session(session_id: str, teacher: dict = Depends(get_current_teacher)):
 
 
 @router.get("/sessions/{session_id}/qrcode.png")
-def session_qrcode(session_id: str, teacher: dict = Depends(get_current_teacher)):
+def session_qrcode(session_id: str):
+    """Public: rendered via a plain <img> tag on the teacher's live page, which
+    can't send an Authorization header. It only ever encodes the join URL,
+    which is meant to be shared with the whole class anyway."""
     session = store.get_session(session_id)
-    if not session or session["teacher_id"] != teacher["id"]:
+    if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     img = qrcode.make(_join_url(session["code"]))
     buf = io.BytesIO()
