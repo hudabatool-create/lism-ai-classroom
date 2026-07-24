@@ -13,6 +13,10 @@ __pycache__/
 *.pyc
 backend/.env
 
+# Dev server logs (local verification runs)
+*.out.log
+*.err.log
+
 # Editors / OS
 .vscode/
 .idea/
