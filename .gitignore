@@ -1,0 +1,23 @@
+# Node / Next.js
+node_modules/
+frontend/.next/
+frontend/out/
+frontend/.env
+frontend/.env.local
+npm-debug.log*
+
+# Python
+backend/.venv/
+backend/venv/
+__pycache__/
+*.pyc
+backend/.env
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Claude Code local tool settings (machine-specific, not project source)
+.claude/settings.local.json

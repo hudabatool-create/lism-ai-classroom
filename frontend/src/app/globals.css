@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light dark;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100;
+}
+
+@layer components {
+  .input {
+    @apply w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white;
+  }
+}
