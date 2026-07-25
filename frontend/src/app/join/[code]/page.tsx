@@ -26,6 +26,10 @@ export default function JoinPage() {
   const [warning, setWarning] = useState<string | null>(null);
   const [locked, setLocked] = useState<string | null>(null);
   const [helpSent, setHelpSent] = useState(false);
+  const [coachOpen, setCoachOpen] = useState(false);
+  const [coachMessages, setCoachMessages] = useState<{ role: "student" | "coach"; content: string }[]>([]);
+  const [coachInput, setCoachInput] = useState("");
+  const [coachSending, setCoachSending] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const currentStageRef = useRef<Stage | null>(null);
   const awayRef = useRef(false);
@@ -196,6 +200,26 @@ export default function JoinPage() {
     setTimeout(() => setHelpSent(false), 4000);
   }
 
+  async function handleCoachSend(e: FormEvent) {
+    e.preventDefault();
+    if (!studentId || !coachInput.trim() || coachSending) return;
+    const message = coachInput.trim();
+    const nextHistory = [...coachMessages, { role: "student" as const, content: message }];
+    setCoachMessages(nextHistory);
+    setCoachInput("");
+    setCoachSending(true);
+    try {
+      const res = await api.post<{ reply: string }>(`/api/join/${code}/coach`, {
+        student_id: studentId,
+        message,
+        history: coachMessages,
+      });
+      setCoachMessages([...nextHistory, { role: "coach", content: res.reply }]);
+    } finally {
+      setCoachSending(false);
+    }
+  }
+
   if (error) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 dark:bg-slate-950">
@@ -271,13 +295,68 @@ export default function JoinPage() {
         className="flex-1 border-0"
       />
 
-      {!locked && (
-        <button
-          onClick={handleNeedHelp}
-          className="fixed bottom-4 right-4 rounded-full bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-lg hover:bg-slate-700 dark:bg-brand-600 dark:hover:bg-brand-700"
-        >
-          {helpSent ? "Your teacher has been notified" : "Need help?"}
-        </button>
+      {!locked && !coachOpen && (
+        <div className="fixed bottom-4 right-4 flex flex-col items-end gap-2">
+          <button
+            onClick={() => setCoachOpen(true)}
+            className="rounded-full bg-brand-600 px-4 py-3 text-sm font-semibold text-white shadow-lg hover:bg-brand-700"
+          >
+            AI Learning Coach
+          </button>
+          <button
+            onClick={handleNeedHelp}
+            className="rounded-full bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-lg hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600"
+          >
+            {helpSent ? "Your teacher has been notified" : "Need help?"}
+          </button>
+        </div>
+      )}
+
+      {!locked && coachOpen && (
+        <div className="fixed bottom-4 right-4 flex h-[28rem] w-80 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+          <div className="flex items-center justify-between bg-brand-600 px-4 py-3">
+            <p className="text-sm font-semibold text-white">AI Learning Coach</p>
+            <button onClick={() => setCoachOpen(false)} className="text-white/80 hover:text-white" aria-label="Close">
+              ✕
+            </button>
+          </div>
+          <div className="flex-1 space-y-3 overflow-y-auto p-3">
+            {coachMessages.length === 0 && (
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Stuck on something? Ask a question — the coach will help you think it through, not give you the
+                answer.
+              </p>
+            )}
+            {coachMessages.map((m, i) => (
+              <div
+                key={i}
+                className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
+                  m.role === "student"
+                    ? "ml-auto bg-brand-600 text-white"
+                    : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                }`}
+              >
+                {m.content}
+              </div>
+            ))}
+            {coachSending && <p className="text-xs text-slate-400">Coach is typing...</p>}
+          </div>
+          <form onSubmit={handleCoachSend} className="flex gap-2 border-t border-slate-200 p-2 dark:border-slate-700">
+            <input
+              value={coachInput}
+              onChange={(e) => setCoachInput(e.target.value)}
+              placeholder="Ask the coach..."
+              className="input"
+            />
+            <button
+              type="submit"
+              disabled={coachSending}
+              className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+            >
+              Send
+            </button>
+          </form>
+        </div>
       )}
 
       {locked && (

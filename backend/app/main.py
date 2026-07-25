@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import activities, auth, reports, sessions, stages
+from app.api.routes import activities, auth, coach, insights, reports, sessions, stages
 from app.core.config import settings
 
 app = FastAPI(title=settings.app_name)
@@ -18,6 +18,8 @@ app.include_router(auth.router)
 app.include_router(activities.router)
 app.include_router(sessions.router)
 app.include_router(stages.router)
+app.include_router(coach.router)
+app.include_router(insights.router)
 app.include_router(reports.router)
 
 

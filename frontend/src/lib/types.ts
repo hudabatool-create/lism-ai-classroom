@@ -96,3 +96,44 @@ export interface FocusViolation {
   violation_number: number;
   occurred_at: string;
 }
+
+export interface StagePerformance {
+  stage_id: string;
+  label: string;
+  responses: number;
+  correct: number;
+  incorrect: number;
+  completion_rate: number;
+  most_common_wrong_answer: string | null;
+  most_common_wrong_count: number;
+}
+
+export interface InsightsStats {
+  students_joined: number;
+  participation_rate: number;
+  correct_rate: number | null;
+  per_stage: StagePerformance[];
+  focus_violation_total: number;
+  students_locked: number;
+  student_stats: {
+    student_id: string;
+    name: string;
+    responses: number;
+    correct: number;
+    graded: number;
+    needs_help: boolean;
+    help_requests: number;
+    coach_messages: number;
+    violations: number;
+    locked: boolean;
+  }[];
+}
+
+export interface Insights {
+  source: "ai" | "statistical";
+  stats: InsightsStats;
+  class_summary: string;
+  misconceptions: string[];
+  recommendations: string[];
+  student_notes: { name: string; note: string }[];
+}

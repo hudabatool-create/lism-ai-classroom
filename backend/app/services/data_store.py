@@ -162,6 +162,7 @@ class DataStore:
                 "joined_at": _now(),
                 "needs_help": False,
                 "help_requests": 0,
+                "coach_messages": 0,
             }
             self.students[student["id"]] = student
             return student
@@ -172,6 +173,14 @@ class DataStore:
 
     def get_student(self, student_id: str) -> dict | None:
         return self.students.get(student_id)
+
+    def increment_coach_messages(self, student_id: str) -> int | None:
+        with self._lock:
+            student = self.students.get(student_id)
+            if student is None:
+                return None
+            student["coach_messages"] += 1
+            return student["coach_messages"]
 
     def set_needs_help(self, student_id: str, value: bool) -> dict | None:
         with self._lock:
