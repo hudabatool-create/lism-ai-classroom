@@ -10,8 +10,11 @@ import copy
 import random
 import string
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from threading import Lock
+
+LOGIN_LOCKOUT_MAX_ATTEMPTS = 5
+LOGIN_LOCKOUT_WINDOW = timedelta(minutes=15)
 
 
 def _id() -> str:
@@ -36,6 +39,7 @@ class DataStore:
         self.responses: dict[str, dict] = {}
         self.focus_violations: dict[str, dict] = {}
         self.prompts: dict[str, dict] = {}
+        self.login_failures: dict[str, list[datetime]] = {}
 
     # --- Teachers ---------------------------------------------------
 
@@ -56,6 +60,37 @@ class DataStore:
 
     def get_teacher_by_email(self, email: str) -> dict | None:
         return next((t for t in self.teachers.values() if t["email"].lower() == email.lower()), None)
+
+    # --- Login lockout ---------------------------------------------------
+    # In-memory brute-force protection: after LOGIN_LOCKOUT_MAX_ATTEMPTS
+    # failed logins for an email within LOGIN_LOCKOUT_WINDOW, further
+    # attempts are rejected until the window passes. Keyed on the
+    # normalized email rather than IP, since this scaffold has no reliable
+    # client IP (no reverse proxy config) and the account being targeted
+    # is what actually matters here.
+
+    def _prune_login_failures(self, key: str) -> list[datetime]:
+        cutoff = datetime.now(timezone.utc) - LOGIN_LOCKOUT_WINDOW
+        attempts = [t for t in self.login_failures.get(key, []) if t > cutoff]
+        self.login_failures[key] = attempts
+        return attempts
+
+    def is_login_locked(self, email: str) -> bool:
+        with self._lock:
+            key = email.lower()
+            return len(self._prune_login_failures(key)) >= LOGIN_LOCKOUT_MAX_ATTEMPTS
+
+    def record_login_failure(self, email: str) -> int:
+        with self._lock:
+            key = email.lower()
+            attempts = self._prune_login_failures(key)
+            attempts.append(datetime.now(timezone.utc))
+            self.login_failures[key] = attempts
+            return len(attempts)
+
+    def clear_login_failures(self, email: str) -> None:
+        with self._lock:
+            self.login_failures.pop(email.lower(), None)
 
     # --- Activities ---------------------------------------------------
 
@@ -214,6 +249,16 @@ class DataStore:
 
     def get_student(self, student_id: str) -> dict | None:
         return self.students.get(student_id)
+
+    def get_student_in_session(self, student_id: str, session_id: str) -> dict | None:
+        """Like get_student, but also verifies the student actually belongs
+        to this session -- a student_id observed in one session (e.g. via a
+        WebSocket broadcast) must not be usable to act as a student in a
+        different session."""
+        student = self.students.get(student_id)
+        if student and student["session_id"] == session_id:
+            return student
+        return None
 
     def increment_coach_messages(self, student_id: str) -> int | None:
         with self._lock:

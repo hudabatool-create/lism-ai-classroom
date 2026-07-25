@@ -3,7 +3,7 @@
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import StatCard from "@/components/StatCard";
-import { api } from "@/lib/api";
+import { api, getToken } from "@/lib/api";
 import type {
   Activity,
   FocusViolation,
@@ -110,7 +110,10 @@ export default function LiveSessionPage() {
   useEffect(() => {
     if (!detail) return;
     const wsBase = api.base.replace(/^http/, "ws");
-    const ws = new WebSocket(`${wsBase}/api/ws/session/${detail.session.code}`);
+    // The backend requires the teacher's own JWT to open this connection --
+    // otherwise anyone who knew the session code could silently watch the
+    // live feed with no proof they're the teacher who owns it.
+    const ws = new WebSocket(`${wsBase}/api/ws/session/${detail.session.code}?token=${encodeURIComponent(getToken() ?? "")}`);
 
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data);

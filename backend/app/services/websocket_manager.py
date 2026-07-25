@@ -29,9 +29,17 @@ class ConnectionManager:
             c for c in self.session_connections[session_code] if c.websocket is not websocket
         ]
 
-    async def broadcast(self, session_code: str, message: dict) -> None:
+    async def broadcast(self, session_code: str, message: dict, roles: tuple[str, ...] | None = None) -> None:
+        """If roles is given, only connections with that role receive the
+        message. Use this for anything containing another student's
+        identity or data (join/response/focus/help/status events) -- a
+        student's own connection must never see another student's info.
+        Leave roles as None only for messages safe for every role, like
+        stage pacing commands that carry no student-identifying data."""
         dead: list[WebSocket] = []
         for conn in self.session_connections[session_code]:
+            if roles is not None and conn.role not in roles:
+                continue
             try:
                 await conn.websocket.send_json(message)
             except Exception:

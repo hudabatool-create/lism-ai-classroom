@@ -55,6 +55,8 @@ def summarize_statuses(statuses: dict[str, dict]) -> dict[str, int]:
 
 
 async def broadcast_status_update(session: dict, activity: dict) -> None:
+    # Contains every student's id, violation count and help-request count --
+    # teacher-only, never broadcast to students.
     statuses = compute_student_statuses(session, activity)
     await manager.broadcast(
         session["code"],
@@ -63,4 +65,5 @@ async def broadcast_status_update(session: dict, activity: dict) -> None:
             "statuses": statuses,
             "summary": summarize_statuses(statuses),
         },
+        roles=("teacher",),
     )

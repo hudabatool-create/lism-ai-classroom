@@ -30,8 +30,8 @@ async def ask_coach(code: str, payload: CoachRequest):
     session = store.get_session_by_code(code.upper())
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    if not store.get_student(payload.student_id):
-        raise HTTPException(status_code=404, detail="Student not found")
+    if not store.get_student_in_session(payload.student_id, session["id"]):
+        raise HTTPException(status_code=404, detail="Student not found in this session")
 
     activity = store.get_activity(session["activity_id"])
     manifest = activity["manifest"]
@@ -49,6 +49,7 @@ async def ask_coach(code: str, payload: CoachRequest):
         await manager.broadcast(
             session["code"],
             {"type": "coach_escalated", "student_id": payload.student_id, "message_count": count},
+            roles=("teacher",),
         )
         await broadcast_status_update(session, activity)
 
