@@ -452,11 +452,17 @@ def generate_activity_html(
     objectives: str,
     difficulty: str,
     time_limit: int,
+    custom_prompt: str | None = None,
 ) -> str:
     if settings.openai_api_key:
-        html = _generate_with_openai(subject, grade, topic, activity_type, objectives, difficulty, time_limit)
+        html = _generate_with_openai(
+            subject, grade, topic, activity_type, objectives, difficulty, time_limit, custom_prompt
+        )
         if html:
             return html
+    # Custom prompts require a real LLM call to have any effect; without a
+    # configured key there's nothing to run them through, so fall back to
+    # the same canned template used for that activity type.
     return _canned_template(subject, grade, topic, activity_type, difficulty, time_limit)
 
 
@@ -472,14 +478,29 @@ def _build_master_prompt(prompt_file: str, subject, grade, topic, week, previous
     return filled + "\n\n" + LISM_INTEGRATION_ADDENDUM
 
 
-def _generate_with_openai(subject, grade, topic, activity_type, objectives, difficulty, time_limit) -> str | None:
+def _generate_with_openai(
+    subject, grade, topic, activity_type, objectives, difficulty, time_limit, custom_prompt=None
+) -> str | None:
     try:
         from openai import OpenAI
 
         client = OpenAI(api_key=settings.openai_api_key)
 
         prompt_file = _LESSON_TYPE_TO_PROMPT_FILE.get(activity_type)
-        if prompt_file:
+        if custom_prompt and custom_prompt.strip():
+            # Teacher-pasted prompt (e.g. from the Prompt Library) is used
+            # verbatim; we still require the LISM manifest + SDK contract so
+            # the generated activity works in the Classroom Engine.
+            prompt = (
+                custom_prompt.strip()
+                .replace("[TOPIC NAME]", topic)
+                .replace("[SUBJECT]", subject)
+                .replace("[GRADE]", grade)
+                .replace("[PREVIOUS LESSON TOPIC]", objectives or "the previous lesson")
+                + "\n\n"
+                + LISM_INTEGRATION_ADDENDUM
+            )
+        elif prompt_file:
             prompt = _build_master_prompt(prompt_file, subject, grade, topic, "", objectives)
         else:
             prompt = (

@@ -49,6 +49,7 @@ class GenerateRequest(BaseModel):
     objectives: str = ""
     difficulty: str = "Medium"
     time_limit: int = 10
+    custom_prompt: str | None = None
 
 
 @router.post("/generate")
@@ -61,6 +62,7 @@ def generate_activity(payload: GenerateRequest, teacher: dict = Depends(get_curr
         payload.objectives,
         payload.difficulty,
         payload.time_limit,
+        payload.custom_prompt,
     )
     manifest = extract_manifest(html, fallback_title=payload.topic)
     return store.create_activity(

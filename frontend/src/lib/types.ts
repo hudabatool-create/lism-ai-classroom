@@ -4,6 +4,19 @@ export interface Teacher {
   email: string;
 }
 
+export interface Prompt {
+  id: string;
+  teacher_id: string | null;
+  title: string;
+  category: string;
+  activity_type: string;
+  body: string;
+  is_favorite: boolean;
+  is_builtin: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
 export interface Stage {
   id: string;
   label: string;

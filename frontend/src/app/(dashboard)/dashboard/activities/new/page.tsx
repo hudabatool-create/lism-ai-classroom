@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type FormEvent, type ReactNode, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import type { Activity } from "@/lib/types";
 
@@ -28,6 +29,8 @@ const ACTIVITY_TYPES = [
   "Brainstorm Board",
 ];
 
+const HANDOFF_KEY = "lism_prompt_handoff";
+
 export default function GenerateActivityPage() {
   const router = useRouter();
   const [form, setForm] = useState({
@@ -39,9 +42,27 @@ export default function GenerateActivityPage() {
     difficulty: "Medium",
     time_limit: 10,
   });
+  const [customPrompt, setCustomPrompt] = useState("");
+  const [showCustomPrompt, setShowCustomPrompt] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<Activity | null>(null);
+
+  // If a prompt was handed off from the Prompt Library ("Use in Generator"),
+  // load it once and clear it so a later visit doesn't reuse it by accident.
+  useEffect(() => {
+    const raw = sessionStorage.getItem(HANDOFF_KEY);
+    if (!raw) return;
+    sessionStorage.removeItem(HANDOFF_KEY);
+    try {
+      const handoff = JSON.parse(raw) as { activity_type: string; body: string };
+      setForm((f) => ({ ...f, activity_type: handoff.activity_type || f.activity_type }));
+      setCustomPrompt(handoff.body || "");
+      setShowCustomPrompt(true);
+    } catch {
+      /* ignore malformed handoff data */
+    }
+  }, []);
 
   function update<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -52,7 +73,8 @@ export default function GenerateActivityPage() {
     setLoading(true);
     setError(null);
     try {
-      const activity = await api.post<Activity>("/api/activities/generate", form);
+      const payload = { ...form, custom_prompt: customPrompt.trim() || undefined };
+      const activity = await api.post<Activity>("/api/activities/generate", payload);
       setCreated(activity);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Generation failed");
@@ -122,6 +144,34 @@ export default function GenerateActivityPage() {
               className="input"
             />
           </Field>
+        </div>
+
+        <div className="border-t border-slate-100 pt-4 dark:border-slate-800">
+          <button
+            type="button"
+            onClick={() => setShowCustomPrompt((v) => !v)}
+            className="text-sm font-medium text-brand-600 hover:underline"
+          >
+            {showCustomPrompt ? "Hide" : "Paste your own master prompt"}
+          </button>
+          {showCustomPrompt && (
+            <div className="mt-2">
+              <textarea
+                value={customPrompt}
+                onChange={(e) => setCustomPrompt(e.target.value)}
+                placeholder="Paste a master prompt (e.g. from the Prompt Library) — [TOPIC NAME], [SUBJECT], [GRADE] placeholders will be filled in automatically. Requires an OpenAI key on the backend to actually run."
+                className="input"
+                rows={6}
+              />
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                Browse saved prompts in the{" "}
+                <Link href="/dashboard/prompts" className="text-brand-600 hover:underline">
+                  Prompt Library
+                </Link>
+                .
+              </p>
+            </div>
+          )}
         </div>
 
         {error && (

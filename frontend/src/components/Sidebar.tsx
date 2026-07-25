@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { href: "/dashboard/activities", label: "My Activities" },
   { href: "/dashboard/activities/new", label: "Generate Activity with AI" },
   { href: "/dashboard/activities/upload", label: "Upload HTML Activity" },
+  { href: "/dashboard/prompts", label: "Prompt Library" },
   { href: "/dashboard/live", label: "Live Classroom" },
   { href: "/dashboard/reports", label: "Reports" },
   { href: "/dashboard/insights", label: "AI Insights" },

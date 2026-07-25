@@ -34,6 +34,7 @@ class DataStore:
         self.students: dict[str, dict] = {}
         self.responses: dict[str, dict] = {}
         self.focus_violations: dict[str, dict] = {}
+        self.prompts: dict[str, dict] = {}
 
     # --- Teachers ---------------------------------------------------
 
@@ -250,6 +251,49 @@ class DataStore:
     def list_responses(self, session_id: str) -> list[dict]:
         items = [r for r in self.responses.values() if r["session_id"] == session_id]
         return sorted(items, key=lambda r: r["submitted_at"])
+
+    # --- Prompt Library (custom, teacher-owned prompts only; built-in
+    # master prompts are synthesized on read in routes/prompts.py, not
+    # stored here) ---------------------------------------------------
+
+    def create_prompt(self, teacher_id: str, title: str, category: str, activity_type: str, body: str) -> dict:
+        with self._lock:
+            prompt = {
+                "id": _id(),
+                "teacher_id": teacher_id,
+                "title": title,
+                "category": category,
+                "activity_type": activity_type,
+                "body": body,
+                "is_favorite": False,
+                "created_at": _now(),
+                "updated_at": _now(),
+            }
+            self.prompts[prompt["id"]] = prompt
+            return prompt
+
+    def list_prompts(self, teacher_id: str) -> list[dict]:
+        items = [p for p in self.prompts.values() if p["teacher_id"] == teacher_id]
+        return sorted(items, key=lambda p: p["created_at"], reverse=True)
+
+    def get_prompt(self, prompt_id: str) -> dict | None:
+        return self.prompts.get(prompt_id)
+
+    def update_prompt(self, prompt_id: str, title: str, category: str, activity_type: str, body: str) -> dict:
+        with self._lock:
+            prompt = self.prompts[prompt_id]
+            prompt.update(title=title, category=category, activity_type=activity_type, body=body, updated_at=_now())
+            return prompt
+
+    def set_prompt_favorite(self, prompt_id: str, value: bool) -> dict:
+        with self._lock:
+            prompt = self.prompts[prompt_id]
+            prompt["is_favorite"] = value
+            return prompt
+
+    def delete_prompt(self, prompt_id: str) -> None:
+        with self._lock:
+            self.prompts.pop(prompt_id, None)
 
 
 store = DataStore()
