@@ -33,6 +33,7 @@ class DataStore:
         self.sessions: dict[str, dict] = {}
         self.students: dict[str, dict] = {}
         self.responses: dict[str, dict] = {}
+        self.focus_violations: dict[str, dict] = {}
 
     # --- Teachers ---------------------------------------------------
 
@@ -82,7 +83,7 @@ class DataStore:
 
     # --- Sessions ---------------------------------------------------
 
-    def create_session(self, teacher_id: str, activity_id: str) -> dict:
+    def create_session(self, teacher_id: str, activity_id: str, session_type: str = "lesson") -> dict:
         with self._lock:
             code = _gen_code()
             while any(s["code"] == code for s in self.sessions.values()):
@@ -93,6 +94,9 @@ class DataStore:
                 "activity_id": activity_id,
                 "code": code,
                 "status": "active",
+                # "lesson" | "practice" | "assessment" — only "assessment"
+                # enforces Focus Mode on the student side.
+                "session_type": session_type,
                 "created_at": _now(),
                 "ended_at": None,
                 # Classroom Engine stage state. current_stage_index == -1 means
@@ -156,6 +160,8 @@ class DataStore:
                 "grade": grade,
                 "section": section,
                 "joined_at": _now(),
+                "needs_help": False,
+                "help_requests": 0,
             }
             self.students[student["id"]] = student
             return student
@@ -163,6 +169,49 @@ class DataStore:
     def list_students(self, session_id: str) -> list[dict]:
         items = [s for s in self.students.values() if s["session_id"] == session_id]
         return sorted(items, key=lambda s: s["joined_at"])
+
+    def get_student(self, student_id: str) -> dict | None:
+        return self.students.get(student_id)
+
+    def set_needs_help(self, student_id: str, value: bool) -> dict | None:
+        with self._lock:
+            student = self.students.get(student_id)
+            if student is None:
+                return None
+            student["needs_help"] = value
+            if value:
+                student["help_requests"] += 1
+            return student
+
+    # --- Focus Mode ---------------------------------------------------
+
+    def add_focus_violation(self, session_id: str, student_id: str, violation_type: str) -> dict:
+        with self._lock:
+            count = self.get_violation_count(session_id, student_id) + 1
+            violation = {
+                "id": _id(),
+                "session_id": session_id,
+                "student_id": student_id,
+                "type": violation_type,
+                "violation_number": count,
+                "occurred_at": _now(),
+            }
+            self.focus_violations[violation["id"]] = violation
+            return violation
+
+    def get_violation_count(self, session_id: str, student_id: str) -> int:
+        return sum(
+            1
+            for v in self.focus_violations.values()
+            if v["session_id"] == session_id and v["student_id"] == student_id
+        )
+
+    def is_locked(self, session_id: str, student_id: str) -> bool:
+        return self.get_violation_count(session_id, student_id) >= 3
+
+    def list_focus_violations(self, session_id: str) -> list[dict]:
+        items = [v for v in self.focus_violations.values() if v["session_id"] == session_id]
+        return sorted(items, key=lambda v: v["occurred_at"])
 
     # --- Responses ---------------------------------------------------
 

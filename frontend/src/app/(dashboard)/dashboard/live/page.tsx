@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import type { Activity, SessionInfo } from "@/lib/types";
+import type { Activity, SessionInfo, SessionType } from "@/lib/types";
 
 export default function LiveClassroomPage() {
   const router = useRouter();
@@ -12,6 +12,7 @@ export default function LiveClassroomPage() {
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [launching, setLaunching] = useState<string | null>(null);
+  const [sessionTypes, setSessionTypes] = useState<Record<string, SessionType>>({});
 
   useEffect(() => {
     Promise.all([api.get<Activity[]>("/api/activities"), api.get<SessionInfo[]>("/api/sessions")])
@@ -25,7 +26,8 @@ export default function LiveClassroomPage() {
   async function handleLaunch(activityId: string) {
     setLaunching(activityId);
     try {
-      const session = await api.post<SessionInfo>(`/api/activities/${activityId}/launch`);
+      const sessionType = sessionTypes[activityId] ?? "lesson";
+      const session = await api.post<SessionInfo>(`/api/activities/${activityId}/launch?session_type=${sessionType}`);
       router.push(`/dashboard/live/${session.id}`);
     } finally {
       setLaunching(null);
@@ -48,7 +50,7 @@ export default function LiveClassroomPage() {
           {activities.map((a) => (
             <div
               key={a.id}
-              className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900"
+              className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900"
             >
               <div>
                 <p className="font-medium text-slate-900 dark:text-white">{a.title}</p>
@@ -56,13 +58,24 @@ export default function LiveClassroomPage() {
                   {a.subject || "General"} &middot; Grade {a.grade || "-"}
                 </p>
               </div>
-              <button
-                onClick={() => handleLaunch(a.id)}
-                disabled={launching === a.id}
-                className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
-              >
-                {launching === a.id ? "Launching..." : "Start"}
-              </button>
+              <div className="flex items-center gap-2">
+                <select
+                  value={sessionTypes[a.id] ?? "lesson"}
+                  onChange={(e) => setSessionTypes((prev) => ({ ...prev, [a.id]: e.target.value as SessionType }))}
+                  className="rounded-lg border border-slate-300 bg-white px-2 py-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                >
+                  <option value="lesson">Lesson Mode</option>
+                  <option value="practice">Practice Mode</option>
+                  <option value="assessment">Assessment Mode</option>
+                </select>
+                <button
+                  onClick={() => handleLaunch(a.id)}
+                  disabled={launching === a.id}
+                  className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+                >
+                  {launching === a.id ? "Launching..." : "Start"}
+                </button>
+              </div>
             </div>
           ))}
         </div>

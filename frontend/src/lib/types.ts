@@ -40,12 +40,15 @@ export interface Activity {
   manifest: LessonManifest;
 }
 
+export type SessionType = "lesson" | "practice" | "assessment";
+
 export interface SessionInfo {
   id: string;
   teacher_id: string;
   activity_id: string;
   code: string;
   status: "active" | "ended";
+  session_type: SessionType;
   created_at: string;
   ended_at: string | null;
   join_url?: string;
@@ -62,6 +65,8 @@ export interface Student {
   grade: string;
   section: string;
   joined_at: string;
+  needs_help: boolean;
+  help_requests: number;
 }
 
 export interface ResponseItem {
@@ -73,4 +78,21 @@ export interface ResponseItem {
   answer: string;
   mark: number | null;
   submitted_at: string;
+}
+
+export type StudentStatusValue = "locked" | "inactive" | "needs_help" | "completed" | "working" | "waiting";
+
+export interface StudentStatus {
+  status: StudentStatusValue;
+  violation_count: number;
+  help_requests: number;
+}
+
+export interface FocusViolation {
+  id: string;
+  session_id: string;
+  student_id: string;
+  type: string;
+  violation_number: number;
+  occurred_at: string;
 }

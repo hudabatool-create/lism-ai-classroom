@@ -4,7 +4,16 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import StatCard from "@/components/StatCard";
 import { api } from "@/lib/api";
-import type { Activity, ResponseItem, SessionInfo, Stage, Student } from "@/lib/types";
+import type {
+  Activity,
+  FocusViolation,
+  ResponseItem,
+  SessionInfo,
+  Stage,
+  Student,
+  StudentStatus,
+  StudentStatusValue,
+} from "@/lib/types";
 
 function CopyButton({ value, label }: { value: string; label: string }) {
   const [copied, setCopied] = useState(false);
@@ -46,12 +55,39 @@ function useCountdown(startedAt: string | null, durationSeconds: number | null, 
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
+const STATUS_LABELS: Record<StudentStatusValue, string> = {
+  working: "Working",
+  completed: "Completed",
+  waiting: "Waiting",
+  needs_help: "Needs Help",
+  inactive: "Inactive",
+  locked: "Locked",
+};
+
+const STATUS_BADGE_CLASSES: Record<StudentStatusValue, string> = {
+  working: "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
+  completed: "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400",
+  waiting: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400",
+  needs_help: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+  inactive: "bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500",
+  locked: "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-400",
+};
+
+const SESSION_TYPE_LABELS: Record<string, string> = {
+  lesson: "Lesson Mode",
+  practice: "Practice Mode",
+  assessment: "Assessment Mode (Focus Mode on)",
+};
+
 interface SessionDetail {
   session: SessionInfo;
   activity: Activity;
   students: Student[];
   responses: ResponseItem[];
   current_stage: Stage | null;
+  student_statuses: Record<string, StudentStatus>;
+  status_summary: Record<string, number>;
+  focus_violations: FocusViolation[];
 }
 
 export default function LiveSessionPage() {
@@ -104,6 +140,12 @@ export default function LiveSessionPage() {
         }
         if (msg.type === "timer_extended") {
           return { ...prev, session: { ...prev.session, stage_duration_seconds: msg.durationSeconds } };
+        }
+        if (msg.type === "status_update") {
+          return { ...prev, student_statuses: msg.statuses, status_summary: msg.summary };
+        }
+        if (msg.type === "focus_violation") {
+          return { ...prev, focus_violations: [...prev.focus_violations, msg.violation] };
         }
         return prev;
       });
@@ -160,11 +202,18 @@ export default function LiveSessionPage() {
     return <p className="text-sm text-slate-500">Loading session...</p>;
   }
 
-  const { session, activity, students, responses, current_stage } = detail;
+  const {
+    session,
+    activity,
+    students,
+    responses,
+    current_stage,
+    student_statuses = {},
+    status_summary = {},
+    focus_violations = [],
+  } = detail;
   const stages = activity.manifest.stages;
   const isLastStage = session.current_stage_index >= stages.length - 1;
-  const stageResponses = current_stage ? responses.filter((r) => r.stage_id === current_stage.id) : [];
-  const completionRate = students.length ? Math.round((stageResponses.length / students.length) * 100) : 0;
 
   return (
     <div>
@@ -175,6 +224,10 @@ export default function LiveSessionPage() {
             Session code <span className="font-mono font-semibold text-brand-600">{session.code}</span> &middot;{" "}
             <span className={session.status === "active" ? "text-green-600" : "text-slate-400"}>
               {session.status}
+            </span>
+            {" · "}
+            <span className={session.session_type === "assessment" ? "font-medium text-amber-600" : ""}>
+              {SESSION_TYPE_LABELS[session.session_type] ?? session.session_type}
             </span>
           </p>
         </div>
@@ -318,10 +371,14 @@ export default function LiveSessionPage() {
         </div>
       )}
 
-      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard label="Students Joined" value={students.length} />
-        <StatCard label={current_stage ? `Responses (${current_stage.label})` : "Responses"} value={stageResponses.length} />
-        <StatCard label="Completion" value={`${completionRate}%`} />
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+        <StatCard label="Joined" value={students.length} />
+        <StatCard label="Working" value={status_summary.working ?? 0} />
+        <StatCard label="Completed" value={status_summary.completed ?? 0} />
+        <StatCard label="Waiting" value={status_summary.waiting ?? 0} />
+        <StatCard label="Needs Help" value={status_summary.needs_help ?? 0} />
+        <StatCard label="Inactive" value={status_summary.inactive ?? 0} />
+        <StatCard label="Locked" value={status_summary.locked ?? 0} />
       </div>
 
       <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -331,11 +388,28 @@ export default function LiveSessionPage() {
             <p className="text-sm text-slate-500">No one has joined yet.</p>
           ) : (
             <ul className="space-y-2">
-              {students.map((s) => (
-                <li key={s.id} className="rounded-lg border border-slate-200 px-4 py-2 text-sm dark:border-slate-800">
-                  {s.name} {s.grade && `· Grade ${s.grade}`} {s.section && `· ${s.section}`}
-                </li>
-              ))}
+              {students.map((s) => {
+                const statusInfo = student_statuses[s.id];
+                const status = statusInfo?.status ?? "waiting";
+                return (
+                  <li
+                    key={s.id}
+                    className="flex items-center justify-between rounded-lg border border-slate-200 px-4 py-2 text-sm dark:border-slate-800"
+                  >
+                    <span>
+                      {s.name} {s.grade && `· Grade ${s.grade}`} {s.section && `· ${s.section}`}
+                    </span>
+                    <span className="flex items-center gap-2">
+                      {statusInfo && statusInfo.violation_count > 0 && (
+                        <span className="text-xs text-red-500">{statusInfo.violation_count}/3 exits</span>
+                      )}
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_BADGE_CLASSES[status]}`}>
+                        {STATUS_LABELS[status]}
+                      </span>
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
@@ -372,6 +446,29 @@ export default function LiveSessionPage() {
           )}
         </div>
       </div>
+
+      {focus_violations.length > 0 && (
+        <div className="mt-8">
+          <h2 className="mb-2 text-lg font-semibold text-slate-900 dark:text-white">Focus report</h2>
+          <ul className="space-y-2">
+            {[...focus_violations].reverse().map((v) => {
+              const student = students.find((s) => s.id === v.student_id);
+              return (
+                <li
+                  key={v.id}
+                  className="flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm dark:border-red-900 dark:bg-red-950"
+                >
+                  <span>
+                    {student?.name ?? "Unknown student"}{" "}
+                    <span className="text-xs text-red-500">&middot; exit #{v.violation_number}</span>
+                  </span>
+                  <span className="text-xs text-red-500">{new Date(v.occurred_at).toLocaleTimeString()}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

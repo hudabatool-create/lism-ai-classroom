@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from app.api.deps import get_current_teacher
 from app.core.config import settings
 from app.services.data_store import store
+from app.services.status_service import broadcast_status_update, compute_student_statuses, summarize_statuses
 from app.services.websocket_manager import manager
 
 router = APIRouter(prefix="/api", tags=["sessions"])
@@ -21,11 +22,11 @@ def _join_url(code: str) -> str:
 
 
 @router.post("/activities/{activity_id}/launch")
-def launch_session(activity_id: str, teacher: dict = Depends(get_current_teacher)):
+def launch_session(activity_id: str, session_type: str = "lesson", teacher: dict = Depends(get_current_teacher)):
     activity = store.get_activity(activity_id)
     if not activity or activity["teacher_id"] != teacher["id"]:
         raise HTTPException(status_code=404, detail="Activity not found")
-    session = store.create_session(teacher["id"], activity_id)
+    session = store.create_session(teacher["id"], activity_id, session_type)
     return {**session, "join_url": _join_url(session["code"])}
 
 
@@ -44,6 +45,7 @@ def get_session(session_id: str, teacher: dict = Depends(get_current_teacher)):
     current_stage = None
     if activity and session["current_stage_index"] >= 0:
         current_stage = activity["manifest"]["stages"][session["current_stage_index"]]
+    statuses = compute_student_statuses(session, activity)
     return {
         "session": {**session, "join_url": _join_url(session["code"])},
         "activity": activity,
@@ -51,6 +53,9 @@ def get_session(session_id: str, teacher: dict = Depends(get_current_teacher)):
         "responses": responses,
         "current_stage": current_stage,
         "online_student_ids": list(manager.online_student_ids(session["code"])),
+        "student_statuses": statuses,
+        "status_summary": summarize_statuses(statuses),
+        "focus_violations": store.list_focus_violations(session_id),
     }
 
 
@@ -118,6 +123,8 @@ async def join_session(code: str, payload: JoinRequest):
         raise HTTPException(status_code=400, detail="This session has ended")
     student = store.add_student_to_session(session["id"], payload.name, payload.grade, payload.section)
     await manager.broadcast(session["code"], {"type": "student_joined", "student": student})
+    activity = store.get_activity(session["activity_id"])
+    await broadcast_status_update(session, activity)
     return {"student": student, "session": session}
 
 
@@ -126,6 +133,10 @@ async def submit_response(code: str, payload: ResponseRequest):
     session = store.get_session_by_code(code.upper())
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+    if not store.get_student(payload.student_id):
+        raise HTTPException(status_code=404, detail="Student not found")
+    if store.is_locked(session["id"], payload.student_id):
+        raise HTTPException(status_code=403, detail="This activity is locked due to focus violations")
     activity = store.get_activity(session["activity_id"])
     stage_id = payload.stage_id
     if not stage_id:
@@ -133,8 +144,48 @@ async def submit_response(code: str, payload: ResponseRequest):
         stage_index = session["current_stage_index"] if session["current_stage_index"] >= 0 else 0
         stage_id = stages[stage_index]["id"]
     response = store.add_response(session["id"], payload.student_id, stage_id, payload.correct, payload.answer, payload.mark)
+    store.set_needs_help(payload.student_id, False)
     await manager.broadcast(session["code"], {"type": "response_submitted", "response": response})
+    await broadcast_status_update(session, activity)
     return response
+
+
+class FocusViolationRequest(BaseModel):
+    student_id: str
+    type: str = "tab_switch"
+
+
+@router.post("/join/{code}/focus-violation")
+async def report_focus_violation(code: str, payload: FocusViolationRequest):
+    session = store.get_session_by_code(code.upper())
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if not store.get_student(payload.student_id):
+        raise HTTPException(status_code=404, detail="Student not found")
+    violation = store.add_focus_violation(session["id"], payload.student_id, payload.type)
+    locked = violation["violation_number"] >= 3
+    await manager.broadcast(session["code"], {"type": "focus_violation", "violation": violation, "locked": locked})
+    activity = store.get_activity(session["activity_id"])
+    await broadcast_status_update(session, activity)
+    return {"violation_number": violation["violation_number"], "locked": locked}
+
+
+class NeedHelpRequest(BaseModel):
+    student_id: str
+
+
+@router.post("/join/{code}/need-help")
+async def request_help(code: str, payload: NeedHelpRequest):
+    session = store.get_session_by_code(code.upper())
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    student = store.set_needs_help(payload.student_id, True)
+    if student is None:
+        raise HTTPException(status_code=404, detail="Student not found")
+    await manager.broadcast(session["code"], {"type": "need_help_requested", "student": student})
+    activity = store.get_activity(session["activity_id"])
+    await broadcast_status_update(session, activity)
+    return {"help_requests": student["help_requests"]}
 
 
 @router.websocket("/ws/session/{code}")
@@ -142,8 +193,12 @@ async def session_ws(websocket: WebSocket, code: str, student_id: str | None = Q
     code = code.upper()
     role = "student" if student_id else "teacher"
     await manager.connect(code, websocket, role, student_id)
+    session = store.get_session_by_code(code)
     if role == "student":
         await manager.broadcast(code, {"type": "student_online", "student_id": student_id})
+    if session:
+        activity = store.get_activity(session["activity_id"])
+        await broadcast_status_update(session, activity)
     try:
         while True:
             # Neither side sends anything over this socket today; it's just kept
@@ -153,3 +208,6 @@ async def session_ws(websocket: WebSocket, code: str, student_id: str | None = Q
         manager.disconnect(code, websocket)
         if role == "student":
             await manager.broadcast(code, {"type": "student_offline", "student_id": student_id})
+        if session:
+            activity = store.get_activity(session["activity_id"])
+            await broadcast_status_update(session, activity)

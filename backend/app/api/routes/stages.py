@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from app.api.deps import get_current_teacher
 from app.services.data_store import store
+from app.services.status_service import broadcast_status_update
 from app.services.websocket_manager import manager
 
 router = APIRouter(prefix="/api/sessions", tags=["stages"])
@@ -43,6 +44,7 @@ async def start_stage(session_id: str, teacher: dict = Depends(get_current_teach
             "startedAt": updated["stage_started_at"],
         },
     )
+    await broadcast_status_update(updated, activity)
     return updated
 
 
@@ -53,6 +55,8 @@ async def end_stage(session_id: str, teacher: dict = Depends(get_current_teacher
         raise HTTPException(status_code=400, detail="No stage is running")
     updated = store.end_stage(session_id)
     await manager.broadcast(session["code"], {"type": "stage_ended", "stageIndex": updated["current_stage_index"]})
+    activity = store.get_activity(updated["activity_id"])
+    await broadcast_status_update(updated, activity)
     return updated
 
 

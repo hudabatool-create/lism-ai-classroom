@@ -4,10 +4,10 @@ import { useParams } from "next/navigation";
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Logo from "@/components/Logo";
 import { api } from "@/lib/api";
-import type { LessonManifest, Stage } from "@/lib/types";
+import type { LessonManifest, SessionType, Stage } from "@/lib/types";
 
 interface JoinInfo {
-  session: { code: string; status: string };
+  session: { code: string; status: string; session_type: SessionType };
   activity: { id: string; title: string; manifest: LessonManifest };
   current_stage: Stage | null;
 }
@@ -23,8 +23,12 @@ export default function JoinPage() {
   const [studentId, setStudentId] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
+  const [locked, setLocked] = useState<string | null>(null);
+  const [helpSent, setHelpSent] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const currentStageRef = useRef<Stage | null>(null);
+  const awayRef = useRef(false);
 
   useEffect(() => {
     api
@@ -65,7 +69,7 @@ export default function JoinPage() {
   // shape so activities generated before the Classroom Engine keep working.
   const handleActivityMessage = useCallback(
     (event: MessageEvent) => {
-      if (!studentId) return;
+      if (!studentId || locked) return;
       const data = event.data ?? {};
       let stageId: string | undefined;
       let correct: boolean | null = null;
@@ -93,9 +97,12 @@ export default function JoinPage() {
         .then(() => {
           setFlash("Response submitted — your teacher can see it live.");
           setTimeout(() => setFlash(null), 3000);
+        })
+        .catch(() => {
+          /* most likely locked server-side; the lock overlay already covers this */
         });
     },
-    [studentId, code, info]
+    [studentId, code, info, locked]
   );
 
   useEffect(() => {
@@ -123,6 +130,71 @@ export default function JoinPage() {
     return () => ws.close();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [studentId, code]);
+
+  // Focus Mode: only enforced in Assessment sessions. Detects tab switches,
+  // window switching/minimizing and leaving the LISM window. blur and
+  // visibilitychange both fire for the same physical "left the tab" event in
+  // most browsers, so awayRef collapses them into a single violation per
+  // departure instead of double-counting.
+  const assessmentMode = info?.session.session_type === "assessment";
+  useEffect(() => {
+    if (!studentId || !assessmentMode || locked) return;
+
+    async function reportViolation() {
+      try {
+        const res = await api.post<{ violation_number: number; locked: boolean }>(
+          `/api/join/${code}/focus-violation`,
+          { student_id: studentId, type: "tab_switch" }
+        );
+        if (res.locked) {
+          setLocked(
+            "This activity has been locked because you exceeded the maximum number of window exits. Your teacher has been notified."
+          );
+        } else if (res.violation_number === 2) {
+          setWarning("Final warning: one more exit will lock this activity.");
+        } else {
+          setWarning("Warning: leaving this window during an assessment is being recorded.");
+        }
+      } catch {
+        /* ignore — not critical if a single violation report fails to send */
+      }
+    }
+
+    function handleAway() {
+      if (awayRef.current) return;
+      awayRef.current = true;
+      reportViolation();
+    }
+    function handleBack() {
+      awayRef.current = false;
+    }
+    function handleVisibility() {
+      if (document.hidden) handleAway();
+      else handleBack();
+    }
+
+    window.addEventListener("blur", handleAway);
+    window.addEventListener("focus", handleBack);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.removeEventListener("blur", handleAway);
+      window.removeEventListener("focus", handleBack);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [studentId, assessmentMode, locked, code]);
+
+  useEffect(() => {
+    if (!warning) return;
+    const timeout = setTimeout(() => setWarning(null), 5000);
+    return () => clearTimeout(timeout);
+  }, [warning]);
+
+  async function handleNeedHelp() {
+    if (!studentId) return;
+    await api.post(`/api/join/${code}/need-help`, { student_id: studentId });
+    setHelpSent(true);
+    setTimeout(() => setHelpSent(false), 4000);
+  }
 
   if (error) {
     return (
@@ -160,6 +232,12 @@ export default function JoinPage() {
           </div>
           <h1 className="mb-1 text-xl font-semibold text-slate-900 dark:text-white">{info.activity.title}</h1>
           <p className="mb-6 text-sm text-slate-500 dark:text-slate-400">Enter your details to join.</p>
+          {info.session.session_type === "assessment" && (
+            <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+              This is an assessment. Leaving this window will be recorded, and repeated exits will lock your
+              activity.
+            </p>
+          )}
           <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Name</label>
           <input required value={name} onChange={(e) => setName(e.target.value)} className="input mb-4" />
           <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Grade</label>
@@ -179,10 +257,12 @@ export default function JoinPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">
-      {flash && (
-        <div className="bg-green-600 px-4 py-2 text-center text-sm font-medium text-white">{flash}</div>
+    <div className="relative flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">
+      {flash && <div className="bg-green-600 px-4 py-2 text-center text-sm font-medium text-white">{flash}</div>}
+      {warning && !locked && (
+        <div className="bg-amber-500 px-4 py-2 text-center text-sm font-semibold text-white">{warning}</div>
       )}
+
       <iframe
         ref={iframeRef}
         onLoad={handleIframeLoad}
@@ -190,6 +270,24 @@ export default function JoinPage() {
         src={`${api.base}/api/activities/${info.activity.id}/raw`}
         className="flex-1 border-0"
       />
+
+      {!locked && (
+        <button
+          onClick={handleNeedHelp}
+          className="fixed bottom-4 right-4 rounded-full bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-lg hover:bg-slate-700 dark:bg-brand-600 dark:hover:bg-brand-700"
+        >
+          {helpSent ? "Your teacher has been notified" : "Need help?"}
+        </button>
+      )}
+
+      {locked && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/95 px-6 text-center">
+          <div className="max-w-md">
+            <p className="text-lg font-semibold text-white">Activity locked</p>
+            <p className="mt-3 text-sm text-slate-300">{locked}</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
