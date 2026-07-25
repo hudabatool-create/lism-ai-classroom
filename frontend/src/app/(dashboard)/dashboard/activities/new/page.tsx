@@ -8,6 +8,7 @@ import type { Activity } from "@/lib/types";
 const ACTIVITY_TYPES = [
   "Interactive Lesson Deck",
   "Interactive Worksheet",
+  "Quiz",
   "Multiple Choice",
   "True/False",
   "Fill in the Blanks",
