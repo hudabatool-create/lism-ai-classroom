@@ -1,29 +1,17 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
-const TOKEN_KEY = "lism_token";
-
-export function getToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem(TOKEN_KEY);
-}
-
-export function setToken(token: string) {
-  localStorage.setItem(TOKEN_KEY, token);
-}
-
-export function clearToken() {
-  localStorage.removeItem(TOKEN_KEY);
-}
+// Auth lives in an httpOnly cookie the backend sets on login/signup --
+// there's no token in JS to store or attach, `credentials: "include"` is what
+// makes the browser send it. See AuthGuard, which asks the backend directly
+// (GET /api/auth/me) instead of checking local state for a token.
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = getToken();
   const headers = new Headers(options.headers);
   if (!(options.body instanceof FormData) && !headers.has("Content-Type") && options.body) {
     headers.set("Content-Type", "application/json");
   }
-  if (token) headers.set("Authorization", `Bearer ${token}`);
 
-  const res = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
+  const res = await fetch(`${API_BASE_URL}${path}`, { ...options, headers, credentials: "include" });
   if (!res.ok) {
     let detail = res.statusText;
     try {
@@ -43,11 +31,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 export async function downloadFile(path: string, filename: string): Promise<void> {
-  const token = getToken();
-  const headers = new Headers();
-  if (token) headers.set("Authorization", `Bearer ${token}`);
-
-  const res = await fetch(`${API_BASE_URL}${path}`, { headers });
+  const res = await fetch(`${API_BASE_URL}${path}`, { credentials: "include" });
   if (!res.ok) throw new Error("Download failed");
 
   const blob = await res.blob();

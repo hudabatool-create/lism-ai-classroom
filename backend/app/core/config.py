@@ -27,6 +27,13 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60 * 24 * 7
 
+    # The JWT lives in an httpOnly cookie (never readable by frontend JS) rather
+    # than localStorage or a response body. `cookie_secure` must be true for any
+    # deployment served over HTTPS -- it's false by default only so local dev
+    # over plain http still works (browsers drop `Secure` cookies over http).
+    jwt_cookie_name: str = "lism_session"
+    cookie_secure: bool = False
+
     frontend_origin: str = "http://localhost:3000"
 
     openai_api_key: str | None = None

@@ -198,7 +198,6 @@ async def session_ws(
     websocket: WebSocket,
     code: str,
     student_id: str | None = Query(default=None),
-    token: str | None = Query(default=None),
 ):
     code = code.upper()
     session = store.get_session_by_code(code)
@@ -208,7 +207,11 @@ async def session_ws(
         # Anyone who knows/guesses a session code could otherwise open this
         # connection with no student_id and silently watch every student's
         # name, answers and focus violations with zero proof they're the
-        # teacher who owns it. Require and verify their JWT here.
+        # teacher who owns it. Require and verify their JWT here -- it comes
+        # from the httpOnly session cookie, which the browser attaches to the
+        # handshake automatically (there's no localStorage token to pass as
+        # a query param anymore).
+        token = websocket.cookies.get(settings.jwt_cookie_name)
         auth_payload = decode_access_token(token) if token else None
         teacher = store.get_teacher(auth_payload["sub"]) if auth_payload else None
         if not session or not teacher or teacher["id"] != session["teacher_id"]:

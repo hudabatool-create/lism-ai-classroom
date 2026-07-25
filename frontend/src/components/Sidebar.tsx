@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import Logo from "@/components/Logo";
-import { clearToken } from "@/lib/api";
+import { api } from "@/lib/api";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Overview" },
@@ -22,9 +22,13 @@ export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
 
-  function handleLogout() {
-    clearToken();
-    router.push("/login");
+  async function handleLogout() {
+    // The session cookie is httpOnly -- only the server can clear it.
+    try {
+      await api.post("/api/auth/logout");
+    } finally {
+      router.push("/login");
+    }
   }
 
   return (

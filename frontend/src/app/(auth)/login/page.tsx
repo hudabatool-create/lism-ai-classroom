@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 import Logo from "@/components/Logo";
-import { api, setToken } from "@/lib/api";
+import { api } from "@/lib/api";
 import type { Teacher } from "@/lib/types";
 
 export default function LoginPage() {
@@ -19,8 +19,7 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      const res = await api.post<{ token: string; teacher: Teacher }>("/api/auth/login", { email, password });
-      setToken(res.token);
+      await api.post<{ teacher: Teacher }>("/api/auth/login", { email, password });
       router.push("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");

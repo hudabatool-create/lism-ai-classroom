@@ -2,18 +2,28 @@
 
 import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
-import { getToken } from "@/lib/api";
+import { api } from "@/lib/api";
 
 export default function AuthGuard({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (!getToken()) {
-      router.replace("/login");
-    } else {
-      setReady(true);
-    }
+    let cancelled = false;
+    // The session cookie is httpOnly, so the frontend can't just check for it
+    // locally -- it has to ask the backend whether the cookie it's holding
+    // is actually valid.
+    api
+      .get("/api/auth/me")
+      .then(() => {
+        if (!cancelled) setReady(true);
+      })
+      .catch(() => {
+        if (!cancelled) router.replace("/login");
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   if (!ready) {
