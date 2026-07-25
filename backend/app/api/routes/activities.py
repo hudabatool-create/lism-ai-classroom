@@ -100,6 +100,56 @@ def generate_activity(payload: GenerateRequest, teacher: dict = Depends(get_curr
     return _public_activity(activity)
 
 
+def _get_owned_activity(activity_id: str, teacher: dict) -> dict:
+    activity = store.get_activity(activity_id)
+    if not activity or activity["teacher_id"] != teacher["id"]:
+        raise HTTPException(status_code=404, detail="Activity not found")
+    return activity
+
+
+@router.get("/{activity_id}")
+def get_activity(activity_id: str, teacher: dict = Depends(get_current_teacher)):
+    activity = _get_owned_activity(activity_id, teacher)
+    return _public_activity(activity)
+
+
+class UpdateActivityRequest(BaseModel):
+    title: str
+    subject: str = ""
+    grade: str = ""
+    activity_type: str = "Custom Upload"
+    html: str
+
+
+@router.patch("/{activity_id}")
+def update_activity(activity_id: str, payload: UpdateActivityRequest, teacher: dict = Depends(get_current_teacher)):
+    _get_owned_activity(activity_id, teacher)
+    manifest = extract_manifest(payload.html, fallback_title=payload.title)
+    activity = store.update_activity(
+        activity_id, payload.title, payload.subject, payload.grade, payload.activity_type, payload.html, manifest
+    )
+    return _public_activity(activity)
+
+
+@router.post("/{activity_id}/duplicate")
+def duplicate_activity(activity_id: str, teacher: dict = Depends(get_current_teacher)):
+    _get_owned_activity(activity_id, teacher)
+    copy_activity = store.duplicate_activity(activity_id)
+    return _public_activity(copy_activity)
+
+
+@router.delete("/{activity_id}")
+def delete_activity(activity_id: str, teacher: dict = Depends(get_current_teacher)):
+    _get_owned_activity(activity_id, teacher)
+    if store.has_sessions_for_activity(activity_id):
+        raise HTTPException(
+            status_code=400,
+            detail="This activity has been used in one or more sessions and can't be deleted. Duplicate it to make changes, or keep it for your records.",
+        )
+    store.delete_activity(activity_id)
+    return {"deleted": True}
+
+
 @router.get("/{activity_id}/raw", response_class=HTMLResponse)
 def raw_activity(activity_id: str):
     """Public: students load the activity itself with no auth required."""

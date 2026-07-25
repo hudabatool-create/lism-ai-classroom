@@ -6,6 +6,7 @@ the same method signatures — route handlers and services never touch storage
 directly, they only call through `store`.
 """
 
+import copy
 import random
 import string
 import uuid
@@ -85,6 +86,41 @@ class DataStore:
 
     def get_activity(self, activity_id: str) -> dict | None:
         return self.activities.get(activity_id)
+
+    def update_activity(self, activity_id: str, title: str, subject: str, grade: str, activity_type: str, html: str, manifest: dict) -> dict:
+        with self._lock:
+            activity = self.activities[activity_id]
+            activity.update(
+                title=title,
+                subject=subject,
+                grade=grade,
+                activity_type=activity_type,
+                html=html,
+                manifest=manifest,
+                updated_at=_now(),
+            )
+            return activity
+
+    def duplicate_activity(self, activity_id: str) -> dict:
+        with self._lock:
+            original = self.activities[activity_id]
+            copy_activity = {
+                **original,
+                "id": _id(),
+                "title": f"{original['title']} (Copy)",
+                "manifest": copy.deepcopy(original["manifest"]),
+                "assets": dict(original.get("assets") or {}),
+                "created_at": _now(),
+            }
+            self.activities[copy_activity["id"]] = copy_activity
+            return copy_activity
+
+    def has_sessions_for_activity(self, activity_id: str) -> bool:
+        return any(s["activity_id"] == activity_id for s in self.sessions.values())
+
+    def delete_activity(self, activity_id: str) -> None:
+        with self._lock:
+            self.activities.pop(activity_id, None)
 
     # --- Sessions ---------------------------------------------------
 

@@ -51,6 +51,11 @@ export interface Activity {
   source: "upload" | "ai";
   created_at: string;
   manifest: LessonManifest;
+  asset_files: string[];
+}
+
+export interface ActivityDetail extends Activity {
+  html: string;
 }
 
 export type SessionType = "lesson" | "practice" | "assessment";
