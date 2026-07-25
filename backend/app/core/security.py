@@ -1,30 +1,23 @@
-import hashlib
-import hmac
-import secrets
 from datetime import datetime, timedelta, timezone
 
+from argon2 import PasswordHasher
+from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHash
 from jose import JWTError, jwt
 
 from app.core.config import settings
 
-# Password hashing uses stdlib PBKDF2 rather than bcrypt/passlib to avoid
-# native-dependency install friction in this scaffold. Swap for Supabase Auth
-# (which handles hashing itself) when real accounts are wired up.
+_password_hasher = PasswordHasher()
 
 
 def hash_password(password: str) -> str:
-    salt = secrets.token_hex(16)
-    digest = hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(salt), 100_000).hex()
-    return f"{salt}${digest}"
+    return _password_hasher.hash(password)
 
 
 def verify_password(password: str, hashed: str) -> bool:
     try:
-        salt, digest = hashed.split("$", 1)
-    except ValueError:
+        return _password_hasher.verify(hashed, password)
+    except (VerifyMismatchError, VerificationError, InvalidHash):
         return False
-    check = hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(salt), 100_000).hex()
-    return hmac.compare_digest(check, digest)
 
 
 def create_access_token(teacher_id: str, email: str) -> str:
