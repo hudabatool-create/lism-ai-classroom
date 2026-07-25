@@ -21,10 +21,11 @@ export default function ReportsPage() {
 
   const activityTitle = (id: string) => activities.find((a) => a.id === id)?.title ?? "Unknown activity";
 
-  async function handleDownload(sessionId: string, code: string, format: "pdf" | "csv") {
+  async function handleDownload(sessionId: string, code: string, format: "pdf" | "csv" | "excel") {
     setDownloading(`${sessionId}-${format}`);
     try {
-      await downloadFile(`/api/reports/${sessionId}/${format}`, `report-${code}.${format}`);
+      const extension = format === "excel" ? "xlsx" : format;
+      await downloadFile(`/api/reports/${sessionId}/${format}`, `report-${code}.${extension}`);
     } finally {
       setDownloading(null);
     }
@@ -34,7 +35,7 @@ export default function ReportsPage() {
     <div>
       <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Reports</h1>
       <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-        Export responses, scores, and completion data for any session.
+        Export responses, completion data, and the Focus Report for any session.
       </p>
 
       {loading ? (
@@ -79,6 +80,13 @@ export default function ReportsPage() {
                         className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium hover:bg-slate-100 disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-800"
                       >
                         CSV
+                      </button>
+                      <button
+                        onClick={() => handleDownload(s.id, s.code, "excel")}
+                        disabled={downloading === `${s.id}-excel`}
+                        className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium hover:bg-slate-100 disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-800"
+                      >
+                        Excel
                       </button>
                     </div>
                   </td>
