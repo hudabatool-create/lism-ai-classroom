@@ -2,6 +2,7 @@ export interface Teacher {
   id: string;
   name: string;
   email: string;
+  email_verified: boolean;
 }
 
 export interface Prompt {

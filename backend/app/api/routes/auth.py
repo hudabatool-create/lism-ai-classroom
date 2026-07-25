@@ -5,6 +5,7 @@ from app.api.deps import get_current_teacher
 from app.core.config import settings
 from app.core.security import create_access_token, hash_password, verify_password
 from app.services.data_store import LOGIN_LOCKOUT_WINDOW, store
+from app.services.email_service import send_password_reset_email, send_verification_email
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -26,8 +27,28 @@ class AuthResponse(BaseModel):
     teacher: dict
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    password: str
+
+
 def _public(teacher: dict) -> dict:
-    return {"id": teacher["id"], "name": teacher["name"], "email": teacher["email"]}
+    return {
+        "id": teacher["id"],
+        "name": teacher["name"],
+        "email": teacher["email"],
+        "email_verified": teacher["email_verified"],
+    }
+
+
+def _send_verification_email(teacher: dict) -> None:
+    token = store.create_email_verification_token(teacher["id"])
+    verify_url = f"{settings.frontend_origin}/verify-email/{token}"
+    send_verification_email(teacher["email"], teacher["name"], verify_url)
 
 
 def _set_session_cookie(response: Response, token: str) -> None:
@@ -51,6 +72,7 @@ def signup(payload: SignupRequest, response: Response):
     if store.get_teacher_by_email(payload.email):
         raise HTTPException(status_code=400, detail="An account with this email already exists")
     teacher = store.create_teacher(payload.name, payload.email, hash_password(payload.password))
+    _send_verification_email(teacher)
     token = create_access_token(teacher["id"], teacher["email"])
     _set_session_cookie(response, token)
     return AuthResponse(teacher=_public(teacher))
@@ -87,3 +109,44 @@ def logout(response: Response):
 @router.get("/me", response_model=AuthResponse)
 def me(teacher: dict = Depends(get_current_teacher)):
     return AuthResponse(teacher=_public(teacher))
+
+
+@router.get("/verify-email/{token}")
+def verify_email(token: str):
+    teacher_id = store.consume_email_verification_token(token)
+    if teacher_id is None:
+        raise HTTPException(status_code=400, detail="This verification link is invalid or has expired")
+    return {"ok": True}
+
+
+@router.post("/resend-verification")
+def resend_verification(teacher: dict = Depends(get_current_teacher)):
+    if teacher["email_verified"]:
+        return {"ok": True, "already_verified": True}
+    _send_verification_email(teacher)
+    return {"ok": True, "already_verified": False}
+
+
+@router.post("/forgot-password")
+def forgot_password(payload: ForgotPasswordRequest):
+    # Always return the same response whether or not the account exists --
+    # otherwise this endpoint becomes a way to check which emails have
+    # accounts here.
+    teacher = store.get_teacher_by_email(payload.email)
+    if teacher:
+        token = store.create_password_reset_token(teacher["id"])
+        reset_url = f"{settings.frontend_origin}/reset-password/{token}"
+        send_password_reset_email(teacher["email"], teacher["name"], reset_url)
+    return {"ok": True}
+
+
+@router.post("/reset-password")
+def reset_password(payload: ResetPasswordRequest):
+    if len(payload.password) < MIN_PASSWORD_LENGTH:
+        raise HTTPException(status_code=400, detail=f"Password must be at least {MIN_PASSWORD_LENGTH} characters")
+    teacher_id = store.consume_password_reset_token(payload.token)
+    if teacher_id is None:
+        raise HTTPException(status_code=400, detail="This reset link is invalid or has expired")
+    store.update_teacher_password(teacher_id, hash_password(payload.password))
+    store.clear_login_failures(store.get_teacher(teacher_id)["email"])
+    return {"ok": True}

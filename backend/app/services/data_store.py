@@ -8,6 +8,7 @@ directly, they only call through `store`.
 
 import copy
 import random
+import secrets
 import string
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -15,6 +16,9 @@ from threading import Lock
 
 LOGIN_LOCKOUT_MAX_ATTEMPTS = 5
 LOGIN_LOCKOUT_WINDOW = timedelta(minutes=15)
+
+EMAIL_VERIFICATION_TOKEN_TTL = timedelta(days=1)
+PASSWORD_RESET_TOKEN_TTL = timedelta(hours=1)
 
 
 def _id() -> str:
@@ -40,6 +44,8 @@ class DataStore:
         self.focus_violations: dict[str, dict] = {}
         self.prompts: dict[str, dict] = {}
         self.login_failures: dict[str, list[datetime]] = {}
+        self.email_verification_tokens: dict[str, dict] = {}
+        self.password_reset_tokens: dict[str, dict] = {}
 
     # --- Teachers ---------------------------------------------------
 
@@ -50,6 +56,7 @@ class DataStore:
                 "name": name,
                 "email": email,
                 "password_hash": password_hash,
+                "email_verified": False,
                 "created_at": _now(),
             }
             self.teachers[teacher["id"]] = teacher
@@ -60,6 +67,54 @@ class DataStore:
 
     def get_teacher_by_email(self, email: str) -> dict | None:
         return next((t for t in self.teachers.values() if t["email"].lower() == email.lower()), None)
+
+    def update_teacher_password(self, teacher_id: str, password_hash: str) -> None:
+        with self._lock:
+            self.teachers[teacher_id]["password_hash"] = password_hash
+
+    # --- Email verification ---------------------------------------------------
+
+    def create_email_verification_token(self, teacher_id: str) -> str:
+        with self._lock:
+            token = secrets.token_urlsafe(32)
+            self.email_verification_tokens[token] = {
+                "teacher_id": teacher_id,
+                "expires_at": datetime.now(timezone.utc) + EMAIL_VERIFICATION_TOKEN_TTL,
+            }
+            return token
+
+    def consume_email_verification_token(self, token: str) -> str | None:
+        """Returns the teacher_id and marks the email verified, or None if the
+        token doesn't exist or has expired. Single-use -- always removed."""
+        with self._lock:
+            record = self.email_verification_tokens.pop(token, None)
+            if record is None or record["expires_at"] < datetime.now(timezone.utc):
+                return None
+            teacher = self.teachers.get(record["teacher_id"])
+            if teacher is None:
+                return None
+            teacher["email_verified"] = True
+            return teacher["id"]
+
+    # --- Password reset ---------------------------------------------------
+
+    def create_password_reset_token(self, teacher_id: str) -> str:
+        with self._lock:
+            token = secrets.token_urlsafe(32)
+            self.password_reset_tokens[token] = {
+                "teacher_id": teacher_id,
+                "expires_at": datetime.now(timezone.utc) + PASSWORD_RESET_TOKEN_TTL,
+            }
+            return token
+
+    def consume_password_reset_token(self, token: str) -> str | None:
+        """Returns the teacher_id for a valid, unexpired token, or None.
+        Single-use -- always removed, whether valid or not."""
+        with self._lock:
+            record = self.password_reset_tokens.pop(token, None)
+            if record is None or record["expires_at"] < datetime.now(timezone.utc):
+                return None
+            return record["teacher_id"]
 
     # --- Login lockout ---------------------------------------------------
     # In-memory brute-force protection: after LOGIN_LOCKOUT_MAX_ATTEMPTS

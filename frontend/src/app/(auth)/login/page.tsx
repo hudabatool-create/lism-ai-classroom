@@ -52,7 +52,12 @@ export default function LoginPage() {
           onChange={(e) => setEmail(e.target.value)}
           className="input mb-4"
         />
-        <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Password</label>
+        <div className="mb-1 flex items-center justify-between">
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Password</label>
+          <Link href="/forgot-password" className="text-xs text-brand-600 hover:underline">
+            Forgot password?
+          </Link>
+        </div>
         <input
           type="password"
           required

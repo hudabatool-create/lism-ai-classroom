@@ -36,6 +36,16 @@ class Settings(BaseSettings):
 
     frontend_origin: str = "http://localhost:3000"
 
+    # Optional: sends real email verification / password reset messages via
+    # SMTP. Without smtp_host set, email_service.py logs the message (with
+    # its link) to the console instead, so those flows still work end-to-end
+    # in local dev without a mail server.
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    smtp_from_email: str = "no-reply@lism.local"
+
     openai_api_key: str | None = None
 
     supabase_url: str | None = None
