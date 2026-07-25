@@ -4,7 +4,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import StatCard from "@/components/StatCard";
 import { api } from "@/lib/api";
-import type { Activity, ResponseItem, SessionInfo, Student } from "@/lib/types";
+import type { Activity, ResponseItem, SessionInfo, Stage, Student } from "@/lib/types";
 
 function CopyButton({ value, label }: { value: string; label: string }) {
   const [copied, setCopied] = useState(false);
@@ -25,11 +25,33 @@ function CopyButton({ value, label }: { value: string; label: string }) {
   );
 }
 
+function useCountdown(startedAt: string | null, durationSeconds: number | null, running: boolean) {
+  const [remaining, setRemaining] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!running || !startedAt || durationSeconds == null) {
+      setRemaining(null);
+      return;
+    }
+    const endsAt = new Date(startedAt).getTime() + durationSeconds * 1000;
+    const tick = () => setRemaining(Math.max(0, Math.round((endsAt - Date.now()) / 1000)));
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [startedAt, durationSeconds, running]);
+
+  if (remaining == null) return null;
+  const m = Math.floor(remaining / 60);
+  const s = remaining % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
 interface SessionDetail {
   session: SessionInfo;
   activity: Activity;
   students: Student[];
   responses: ResponseItem[];
+  current_stage: Stage | null;
 }
 
 export default function LiveSessionPage() {
@@ -37,6 +59,7 @@ export default function LiveSessionPage() {
   const sessionId = params.sessionId;
   const [detail, setDetail] = useState<SessionDetail | null>(null);
   const [ending, setEnding] = useState(false);
+  const [stageActionPending, setStageActionPending] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -63,6 +86,25 @@ export default function LiveSessionPage() {
         if (msg.type === "response_submitted") {
           return { ...prev, responses: [...prev.responses, msg.response] };
         }
+        if (msg.type === "stage_started") {
+          return {
+            ...prev,
+            current_stage: msg.stage,
+            session: {
+              ...prev.session,
+              current_stage_index: msg.stageIndex,
+              stage_status: "running",
+              stage_started_at: msg.startedAt,
+              stage_duration_seconds: msg.durationSeconds,
+            },
+          };
+        }
+        if (msg.type === "stage_ended") {
+          return { ...prev, session: { ...prev.session, stage_status: "ended" } };
+        }
+        if (msg.type === "timer_extended") {
+          return { ...prev, session: { ...prev.session, stage_duration_seconds: msg.durationSeconds } };
+        }
         return prev;
       });
     };
@@ -71,6 +113,12 @@ export default function LiveSessionPage() {
     // Only reconnect when the session code changes, not on every response.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detail?.session.code]);
+
+  const remaining = useCountdown(
+    detail?.session.stage_started_at ?? null,
+    detail?.session.stage_duration_seconds ?? null,
+    detail?.session.stage_status === "running"
+  );
 
   async function handleEnd() {
     if (!detail) return;
@@ -83,12 +131,40 @@ export default function LiveSessionPage() {
     }
   }
 
+  async function handleStartStage() {
+    if (!detail) return;
+    setStageActionPending(true);
+    try {
+      await api.post(`/api/sessions/${detail.session.id}/stage/start`);
+    } finally {
+      setStageActionPending(false);
+    }
+  }
+
+  async function handleEndStage() {
+    if (!detail) return;
+    setStageActionPending(true);
+    try {
+      await api.post(`/api/sessions/${detail.session.id}/stage/end`);
+    } finally {
+      setStageActionPending(false);
+    }
+  }
+
+  async function handleExtend() {
+    if (!detail) return;
+    await api.post(`/api/sessions/${detail.session.id}/stage/extend`, { additional_seconds: 60 });
+  }
+
   if (!detail) {
     return <p className="text-sm text-slate-500">Loading session...</p>;
   }
 
-  const { session, activity, students, responses } = detail;
-  const completionRate = students.length ? Math.round((responses.length / students.length) * 100) : 0;
+  const { session, activity, students, responses, current_stage } = detail;
+  const stages = activity.manifest.stages;
+  const isLastStage = session.current_stage_index >= stages.length - 1;
+  const stageResponses = current_stage ? responses.filter((r) => r.stage_id === current_stage.id) : [];
+  const completionRate = students.length ? Math.round((stageResponses.length / students.length) * 100) : 0;
 
   return (
     <div>
@@ -112,6 +188,76 @@ export default function LiveSessionPage() {
           </button>
         )}
       </div>
+
+      {session.status === "active" && (
+        <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-900 dark:text-white">Lesson stages</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                The class only moves on when you say so &mdash; students never advance independently.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {remaining && (
+                <span className="rounded-lg bg-brand-50 px-3 py-1.5 font-mono text-sm font-semibold text-brand-700 dark:bg-slate-800 dark:text-brand-300">
+                  {remaining}
+                </span>
+              )}
+              {session.stage_status === "running" && (
+                <>
+                  <button
+                    onClick={handleExtend}
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
+                  >
+                    +1 min
+                  </button>
+                  <button
+                    onClick={handleEndStage}
+                    disabled={stageActionPending}
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-100 disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-800"
+                  >
+                    End Stage
+                  </button>
+                </>
+              )}
+              {session.stage_status !== "running" && !(session.stage_status === "ended" && isLastStage) && (
+                <button
+                  onClick={handleStartStage}
+                  disabled={stageActionPending}
+                  className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+                >
+                  {session.current_stage_index < 0 ? "Start Stage 1" : "Start Next Stage"}
+                </button>
+              )}
+            </div>
+          </div>
+
+          <ol className="mt-4 flex flex-wrap gap-2">
+            {stages.map((stage, index) => {
+              const isCurrent = index === session.current_stage_index;
+              const isDone = index < session.current_stage_index || (isCurrent && session.stage_status === "ended" && isLastStage);
+              return (
+                <li
+                  key={stage.id}
+                  className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${
+                    isCurrent
+                      ? "border-brand-500 bg-brand-50 text-brand-700 dark:bg-slate-800 dark:text-brand-300"
+                      : isDone
+                        ? "border-green-300 bg-green-50 text-green-700 dark:border-green-900 dark:bg-green-950 dark:text-green-400"
+                        : "border-slate-200 text-slate-500 dark:border-slate-700 dark:text-slate-400"
+                  }`}
+                >
+                  {index + 1}. {stage.label}
+                </li>
+              );
+            })}
+          </ol>
+          {session.stage_status === "ended" && isLastStage && session.current_stage_index >= 0 && (
+            <p className="mt-3 text-sm font-medium text-green-600">Lesson complete &mdash; all stages finished.</p>
+          )}
+        </div>
+      )}
 
       {session.status === "active" && (
         <div className="mt-6 rounded-2xl border border-brand-200 bg-brand-50 p-6 dark:border-brand-900 dark:bg-slate-900">
@@ -174,7 +320,7 @@ export default function LiveSessionPage() {
 
       <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard label="Students Joined" value={students.length} />
-        <StatCard label="Responses" value={responses.length} />
+        <StatCard label={current_stage ? `Responses (${current_stage.label})` : "Responses"} value={stageResponses.length} />
         <StatCard label="Completion" value={`${completionRate}%`} />
       </div>
 
@@ -200,14 +346,18 @@ export default function LiveSessionPage() {
             <p className="text-sm text-slate-500">Waiting for the first response...</p>
           ) : (
             <ul className="space-y-2">
-              {responses.map((r) => {
+              {[...responses].reverse().map((r) => {
                 const student = students.find((s) => s.id === r.student_id);
+                const stage = stages.find((s) => s.id === r.stage_id);
                 return (
                   <li
                     key={r.id}
                     className="flex items-center justify-between rounded-lg border border-slate-200 px-4 py-2 text-sm dark:border-slate-800"
                   >
-                    <span>{student?.name ?? "Unknown student"}</span>
+                    <span>
+                      {student?.name ?? "Unknown student"}
+                      {stage && <span className="ml-2 text-xs text-slate-400">&middot; {stage.label}</span>}
+                    </span>
                     <span
                       className={
                         r.correct ? "text-green-600" : r.correct === false ? "text-red-500" : "text-slate-400"

@@ -6,6 +6,8 @@ import { api } from "@/lib/api";
 import type { Activity } from "@/lib/types";
 
 const ACTIVITY_TYPES = [
+  "Interactive Lesson Deck",
+  "Interactive Worksheet",
   "Multiple Choice",
   "True/False",
   "Fill in the Blanks",

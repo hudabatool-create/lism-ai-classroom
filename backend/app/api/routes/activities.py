@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from app.api.deps import get_current_teacher
 from app.services.ai_service import generate_activity_html
 from app.services.data_store import store
+from app.services.manifest_service import extract_manifest
 
 router = APIRouter(prefix="/api/activities", tags=["activities"])
 
@@ -27,6 +28,7 @@ async def upload_activity(
         raise HTTPException(status_code=400, detail="Only .html/.htm files are supported in this scaffold")
     raw = await file.read()
     html = raw.decode("utf-8", errors="replace")
+    manifest = extract_manifest(html, fallback_title=title)
     return store.create_activity(
         teacher_id=teacher["id"],
         title=title,
@@ -35,6 +37,7 @@ async def upload_activity(
         activity_type=activity_type,
         html=html,
         source="upload",
+        manifest=manifest,
     )
 
 
@@ -59,6 +62,7 @@ def generate_activity(payload: GenerateRequest, teacher: dict = Depends(get_curr
         payload.difficulty,
         payload.time_limit,
     )
+    manifest = extract_manifest(html, fallback_title=payload.topic)
     return store.create_activity(
         teacher_id=teacher["id"],
         title=payload.topic,
@@ -67,6 +71,7 @@ def generate_activity(payload: GenerateRequest, teacher: dict = Depends(get_curr
         activity_type=payload.activity_type,
         html=html,
         source="ai",
+        manifest=manifest,
     )
 
 

@@ -1,13 +1,15 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Logo from "@/components/Logo";
 import { api } from "@/lib/api";
+import type { LessonManifest, Stage } from "@/lib/types";
 
 interface JoinInfo {
   session: { code: string; status: string };
-  activity: { id: string; title: string };
+  activity: { id: string; title: string; manifest: LessonManifest };
+  current_stage: Stage | null;
 }
 
 export default function JoinPage() {
@@ -20,12 +22,17 @@ export default function JoinPage() {
   const [section, setSection] = useState("");
   const [studentId, setStudentId] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const [flash, setFlash] = useState<string | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const currentStageRef = useRef<Stage | null>(null);
 
   useEffect(() => {
     api
       .get<JoinInfo>(`/api/join/${code}`)
-      .then(setInfo)
+      .then((data) => {
+        setInfo(data);
+        currentStageRef.current = data.current_stage;
+      })
       .catch((err) => setError(err instanceof Error ? err.message : "Session not found"));
   }, [code]);
 
@@ -43,24 +50,79 @@ export default function JoinPage() {
     }
   }
 
+  function sendCommand(command: string, extra: Record<string, unknown> = {}) {
+    iframeRef.current?.contentWindow?.postMessage({ type: "lism:command", command, ...extra }, "*");
+  }
+
+  function handleIframeLoad() {
+    if (currentStageRef.current) {
+      sendCommand("start_stage", { stage: currentStageRef.current });
+    }
+  }
+
+  // The activity's response contract: prefer the new 'lism:event' shape
+  // (stage-aware), but also accept the older flat 'lism-activity-response'
+  // shape so activities generated before the Classroom Engine keep working.
   const handleActivityMessage = useCallback(
     (event: MessageEvent) => {
-      if (!studentId || event.data?.type !== "lism-activity-response") return;
+      if (!studentId) return;
+      const data = event.data ?? {};
+      let stageId: string | undefined;
+      let correct: boolean | null = null;
+      let answer = "";
+      let mark: number | null = null;
+
+      if (data.type === "lism:event" && data.event === "student_submitted") {
+        stageId = data.stageId;
+        correct = data.correct ?? null;
+        answer = data.answer ?? "";
+        mark = data.mark ?? null;
+      } else if (data.type === "lism-activity-response") {
+        correct = data.correct ?? null;
+        answer = data.answer ?? "";
+      } else {
+        return;
+      }
+
+      if (!stageId) {
+        stageId = currentStageRef.current?.id ?? info?.activity.manifest.stages[0]?.id;
+      }
+
       api
-        .post(`/api/join/${code}/response`, {
-          student_id: studentId,
-          correct: event.data.correct ?? null,
-          answer: event.data.answer ?? "",
-        })
-        .then(() => setSubmitted(true));
+        .post(`/api/join/${code}/response`, { student_id: studentId, stage_id: stageId, correct, answer, mark })
+        .then(() => {
+          setFlash("Response submitted — your teacher can see it live.");
+          setTimeout(() => setFlash(null), 3000);
+        });
     },
-    [studentId, code]
+    [studentId, code, info]
   );
 
   useEffect(() => {
     window.addEventListener("message", handleActivityMessage);
     return () => window.removeEventListener("message", handleActivityMessage);
   }, [handleActivityMessage]);
+
+  // Once joined, hold a live WebSocket connection so stage-change commands
+  // from the teacher reach this device instantly.
+  useEffect(() => {
+    if (!studentId) return;
+    const wsBase = api.base.replace(/^http/, "ws");
+    const ws = new WebSocket(`${wsBase}/api/ws/session/${code}?student_id=${studentId}`);
+
+    ws.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+      if (msg.type === "stage_started") {
+        currentStageRef.current = msg.stage;
+        sendCommand("start_stage", { stage: msg.stage });
+      } else if (msg.type === "stage_ended") {
+        sendCommand("stage_ended");
+      }
+    };
+
+    return () => ws.close();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [studentId, code]);
 
   if (error) {
     return (
@@ -118,12 +180,16 @@ export default function JoinPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">
-      {submitted && (
-        <div className="bg-green-600 px-4 py-2 text-center text-sm font-medium text-white">
-          Response submitted &mdash; your teacher can see it live.
-        </div>
+      {flash && (
+        <div className="bg-green-600 px-4 py-2 text-center text-sm font-medium text-white">{flash}</div>
       )}
-      <iframe title={info.activity.title} src={`${api.base}/api/activities/${info.activity.id}/raw`} className="flex-1 border-0" />
+      <iframe
+        ref={iframeRef}
+        onLoad={handleIframeLoad}
+        title={info.activity.title}
+        src={`${api.base}/api/activities/${info.activity.id}/raw`}
+        className="flex-1 border-0"
+      />
     </div>
   );
 }

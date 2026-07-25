@@ -1,0 +1,118 @@
+Master Prompt — Interactive HTML Lesson Deck (v3, all subjects)
+Reusable template for any subject and grade
+Table of Contents
+Fill in the bracketed fields, then paste the whole prompt.
+Fill in: [TOPIC NAME] · [SUBJECT] · [GRADE] · [WEEK X] · [PREVIOUS LESSON TOPIC] (Leave keywords blank and write “guess the keywords yourself” if you want them generated. Leave the SUBJECT PROFILE values blank and Claude will choose them from the subject.)
+
+Build a single self-contained interactive HTML slide deck for [TOPIC NAME] — [SUBJECT], Grade [GRADE], Week [WEEK X]. Previous lesson: [PREVIOUS LESSON TOPIC]. Guess the 5–6 lesson keywords yourself from the topic.
+One HTML file, no required external dependencies, no localStorage, runs by opening the file in any browser. It must work as a presentable deck: one slide visible at a time, full-screen friendly, Next and Previous buttons, left/right arrow key support, a slide counter (e.g. “3 / 10”) and a progress dots indicator at the bottom. Students type and submit answers directly into the slides. Every timed slide has a timer that only starts on a click — never on typing, never automatically. Arrow keys must NOT change slide while a student is typing in an input. Total lesson 50 minutes, including 10 minutes reserved across the Starter, Main Activity and Exit Ticket for teacher feedback and for students to explain or defend their work.
+
+1. SUBJECT PROFILE (set this first — it drives all validation)
+Before writing any HTML, choose and state a subject profile at the top of the file as a JS config object, then build every answer box to obey it. Infer sensible values from [SUBJECT] and [TOPIC NAME]:
+const PROFILE = {
+  subject:'[SUBJECT]', grade:'[GRADE]', week:'[WEEK X]',
+  lang:'en',            // 'en' | 'ar' | 'fr' | 'es' | 'ur' | 'hi' …
+  dir:'ltr',            // 'rtl' for Arabic/Urdu — flips the whole layout
+  math:false,           // true → math rendering + symbol palette
+  chem:false,           // true → chemical formula & equation checking
+  code:false,           // true → code-structure checking
+  defaultAnswerType:'prose'   // default box type for this subject
+};
+Answer types — every response box must declare one via data-type. Validation, feedback wording and rubric marking all switch on it:
+data-type
+Use for
+Accepted when
+prose
+explanations, evaluation, reflection
+min word count + min key-term matches + not gibberish
+numeric
+maths, physics, chemistry calculations
+value matches answer key within tolerance, correct units if required
+symbolic
+algebra, formulae, equations, expressions
+normalised form matches any accepted form
+chem
+formulae and balanced equations
+element-aware match, or atom counts balance on both sides
+code
+programming
+required structures/tokens present, not prose length
+short
+fill-in-the-blank, single terms, dates
+matches answer key or accepted synonyms (normalised)
+checklist
+PE, Art, Design, practical/performance work
+required boxes ticked + short justification meeting min words
+mixed
+working + explanation together
+numeric/symbolic part correct AND prose part meets min words
+Per-box attributes to use:
+data-type · data-min (min words, prose only) · data-kw (min key terms) · data-answer (pipe-separated accepted answers) · data-tol (numeric tolerance, absolute or 5%) · data-units (required unit string, e.g. m/s) · data-sf (significant figures required) · data-must (comma-separated tokens that must appear, code/chem) · data-lang (overrides profile language for this box) · data-dok and data-max on Main Activity boxes.
+
+2. VALIDATION RULES BY TYPE
+Universal: blank is always rejected. Every box has a live meter showing what is still required (words, key terms, units, ticked items) and, on Submit, gives a specific reason for rejection — never a generic “wrong”.
+prose — reject if below data-min words, below data-kw key-term matches, or gibberish. Gibberish test = repeated character runs (4+), a majority of tokens with no vowel, or no recognisable word tokens. Apply the vowel-based gibberish test only to Latin-script prose — see script handling below.
+numeric — parse the student’s value robustly: strip spaces, commas as thousand separators, currency symbols, and trailing units; accept 1/2, 0.5, 50%, 2^3, 2e3, − (minus sign) and ٠١٢٣٤٥٦٧٨٩ Arabic-Indic digits as equivalents. Compare against data-answer within data-tol (default 1% or exact if the answer is an integer). If data-units is set, the unit must be present and correct — a right number with wrong or missing units scores partial, not full. If data-sf is set, check significant figures and say so in the feedback. Never judge a numeric answer by word count. Accept an empty-of-prose answer as complete.
+symbolic — normalise before comparing: strip all whitespace, lowercase (except where case is meaningful), convert *→×, x→× only when unambiguous, ^ to superscript form, sqrt(x)→√x, pi→π, <=→≤, >=→≥, !=→≠, remove redundant outer brackets, and treat 2y+3x as equal to 3x+2y for sums by sorting additive terms. Hold several accepted forms in data-answer (e.g. y=2x+3|y=3+2x|2x+3=y). Where full equivalence cannot be checked reliably, mark it as “form accepted — teacher to verify” rather than pretending certainty.
+chem — element symbols are case-sensitive (Co ≠ CO); accept subscripts written as H2O, H₂O or H_2O; accept state symbols (s) (l) (g) (aq); accept ->, →, = as the reaction arrow and + between species. For balancing questions, parse both sides, count atoms per element and check they match, and check total charge — report which element is unbalanced. Never run the vowel gibberish test on formulae.
+code — check for required structures listed in data-must (e.g. class,def,__init__,self,return), correct nesting/indentation presence, and that a runnable-looking statement exists; ignore word count entirely and never gibberish-test code. Report which required element is missing.
+short — normalise case, trim, collapse spaces, strip diacritics/accents when data-lang is a Latin language (so élève = eleve), and match against data-answer synonyms. Accept one-word answers as valid.
+checklist — render the criteria as tick boxes plus one short justification box; accepted when the required number of boxes are ticked and the justification meets data-min words. Use this for PE, Art, Design, drama, music and any lesson whose real output is a performance or artefact rather than typed text.
+mixed — both parts must pass, and the feedback must say which part failed.
+
+3. LANGUAGE, SCRIPT AND RTL HANDLING
+Set <html lang> and dir from PROFILE. When dir:'rtl': mirror the whole layout — reference bar, navigation, progress dots, DOK badges, tables and the objective colour bars all flow right-to-left; Next moves left and Previous moves right visually, but the arrow keys keep their logical meaning (→ = next in LTR, ← = next in RTL). Keep code blocks, formulae and numbers dir:'ltr' inside RTL text so they don’t reverse.
+Script-aware word counting: count tokens for Arabic ؀-ۿ, Urdu, Hindi ऀ-ॿ, Chinese/Japanese (character count ÷ 2 as an approximate word equivalent) — do not rely on Latin-only regex.
+Arabic normalisation before any comparison: strip tashkeel/diacritics ً-ْ, remove tatweel ـ, unify alef أ إ آ ٱ → ا, ى → ي, ة → ه, unify hamza forms, and normalise Arabic-Indic digits to Western digits.
+French/Spanish/Urdu: accent- and diacritic-insensitive comparison for short answers; keep the correct accented spelling in model answers.
+The keyword strip and objectives must appear in the lesson’s language of instruction; if the lesson is bilingual, show the term and its translation in the same chip.
+Never apply the English vowel gibberish heuristic to non-Latin scripts. For non-Latin prose, detect gibberish only by repeated-character runs, single-character spam, and absence of any script-valid word tokens.
+
+4. MATH AND FORMULA RENDERING (offline-safe)
+The file must still work with no internet, so:
+Primary rendering: write all display maths as inline MathML or Unicode (x², √, ≤, π, ∫, Σ, θ, °, ½, →) with <sup>/<sub> and simple CSS fraction spans. This renders in every modern browser with zero dependencies.
+Optional upgrade: if PROFILE.math is true, attempt to load MathJax from a CDN only as a progressive enhancement, wrapped so that failure is silent and the MathML/Unicode fallback remains visible. The deck must never show broken $...$ source or a blank space when offline.
+Symbol palette: on every numeric, symbolic and mixed box in a maths or science lesson, show a small row of insert-at-cursor buttons — √ x² x³ ^ π ≤ ≥ ≠ × ÷ ± ° θ Δ Σ ∫ ( ) / | fraction (plus → (s) (l) (g) (aq) ⇌ when PROFILE.chem). Clicking inserts the symbol at the caret and keeps focus in the box. Also accept ASCII equivalents typed by hand (sqrt, ^2, pi, <=, ->) so a student with a plain keyboard is never blocked.
+Working-out space: for maths Main Activity questions, give a larger multi-line box for method plus a separate single-line numeric box for the final answer, and mark method and answer separately in the rubric.
+
+5. LAYOUT — NO OVERLAPPING (mandatory, verify before finishing)
+Each slide is a flex column with its own internal scroll (overflow:auto); content never spills outside its slide or on top of neighbouring content.
+The fixed reference bar and fixed navigation bar sit at the bottom in that order. Measure their combined height in JavaScript and set the slide area’s bottom offset from that measured value — recalculate on load, on resize, and whenever the reference bar is collapsed or expanded. Do not hard-code the offset.
+Only the fixed bars may be position:fixed; slides use normal flow, not absolutely positioned overlapping blocks.
+Timers, badges, score chips and symbol palettes sit inside the flex flow (e.g. margin-left:auto in a header row) — never floated or absolutely positioned over text.
+Text must wrap, never clip: allow wrapping in chips, badges and table cells; no fixed heights on text containers; formulae and code blocks scroll horizontally inside their own box rather than widening the slide.
+clamp() font sizes so slides fit 1366×768 and 1920×1080 without clipping, reflowing to one column below 900px.
+Check slide by slide at 1366×768 that nothing covers anything — densest slides are the Main Activity, the rubric and the Exit Ticket. If a slide is too tall, reduce padding and font size or move content into the flow; never let it overlap the bars.
+
+6. PERSISTENT REFERENCE BAR
+A slim fixed bar visible on EVERY slide, above the navigation, always showing: (1) the lesson keywords as a compact strip; and (2) the three differentiated objectives in shortened form, colour coded — ALL (green), MOST (yellow), SOME (blue). Compact and readable on a smart board and must not cover slide content. Include a small toggle button to collapse or expand it, with the slide area resizing accordingly. In maths/science lessons the strip may include a key formula chip; in language lessons it shows term + translation.
+
+7. MODEL ANSWERS — LOCKED UNTIL THE STUDENT RESPONDS
+Model answers live only inside collapsible toggles, and every toggle starts locked and unopenable:
+It cannot open until the student has submitted an accepted answer for that slide’s question(s). While locked it reads “🔒 Submit your answer first to unlock the model answer” and clicking does nothing — it must not open, even briefly.
+Starter and Exit Ticket toggles unlock when that slide’s boxes are accepted (all 5 blanks on the Exit Ticket). The rubric slide unlocks when all four DOK responses are accepted.
+Once unlocked the summary reads “Reveal model answer” and opens normally; it stays closed by default.
+Include a small teacher override (“Teacher: unlock answers”) for whole-class feedback.
+Model answers must show full working for maths, balanced equations for chemistry, runnable code for programming, and correctly accented/diacriticised text for language subjects.
+
+8. SLIDE STRUCTURE (exactly 10 slides)
+Slide 1 — TITLE: [TOPIC NAME], subject, grade and week on a clean title layout.
+Slide 2 — KEYWORDS & OBJECTIVE: keywords as a prominent vocabulary strip; the full lesson objective in one sentence; the full ALL / MOST / SOME success criteria in student-friendly “I can…” language.
+Slide 3 — STARTER (5 min + feedback): one open-ended review question about [PREVIOUS LESSON TOPIC]. Timer at 5:00, click to start. Instruction: “Your answer must use at least 1 key term from this lesson.” One response box of the profile-appropriate type. Note: “Feedback: teacher reviews responses and students may explain their answers.” Model answer in the locked toggle.
+Slide 4 — LEARNING OBJECTIVES: ALL / MOST / SOME success criteria, colour coded green / yellow / blue, in “I can…” language.
+Slide 5 — MAIN TEACHING (I DO) (10 min): the topic in 3 clear parts with one labelled diagram or simple interactive visual (click-to-reveal cards, canvas figure, worked example stepper for maths, labelled apparatus for science). Minimal text, visuals dominant. A short “Try it” discussion question at the bottom.
+Slides 6–7 — MAIN ACTIVITY (10 min + feedback, 10 marks): one differentiated task covering DOK 1 Recall (2 marks), DOK 2 Skill (3 marks), DOK 3 Application (3 marks), DOK 4 Evaluation (2 marks), with topic-appropriate questions at each level. Choose the answer type per question — typically short/numeric for DOK 1, numeric/symbolic/code/mixed for DOK 2, mixed for DOK 3, prose for DOK 4. Instruction: “Answers must include at least 2 key terms” (for prose parts; for numeric/symbolic parts require correct method or units instead, and say so on screen). Note: “Feedback: teacher gives feedback on responses and students may defend their work.” Timer at 10:00 on slide 6. Slide 7 shows the rubric.
+Marking as the student submits (mandatory): the moment a DOK response is accepted, mark it against the rubric and show next to that question the rubric level (0–3), the descriptor matched (e.g. “Mostly correct”) and marks earned out of that DOK’s maximum. Mirror every mark into a “Your mark” column in the slide 7 rubric table, update a running total out of 10 live in the rubric header and the navigation bar, and flag criteria still unmarked. Marking basis depends on answer type: correctness against the answer key for numeric, symbolic, chem, short and code (full marks = correct with valid method/units/structure; partial = right method wrong value, or right value wrong units/sig figs; low = attempt only); depth, key-term coverage and reasoning for prose and the prose half of mixed; ticked criteria plus justification for checklist. Label the total “estimated — teacher’s mark is final” and give the teacher a 0/1/2/3 override selector per DOK that recalculates the total.
+MAIN TASK MARKING RUBRIC (10 marks total): DOK 1 Knowledge/Recall — 3: Correct, uses key terms, 2: Mostly correct, 1: Partial, 0: Blank or gibberish — /2. DOK 2 Skill/Accuracy — 3: Fully correct and explained, 2: Mostly correct, 1: Partial and weak, 0: Blank or gibberish — /3. DOK 3 Application — 3: Clear reasoning, 2: Mostly applied, 1: Partial, 0: Blank or gibberish — /3. DOK 4 Evaluation — 3: Well-justified, 2: Reasonable, 1: Limited, 0: Blank or gibberish — /2. TOTAL — /10.
+Slide 8 — CONNECTION LINK (3 min) — TEACHER’S CHOICE: three tabs at the top — “UAE Link”, “AI Link”, “Cross-Curricular Link”; clicking one reveals that version and hides the others. Generate all three: (1) UAE Link — one sentence connecting the topic to life, industry or culture in the UAE; (2) AI Link — one sentence on how AI or emerging technology relates to or is transforming this topic; (3) Cross-Curricular Link — one sentence connecting the topic to another school subject. Each has a short student response box and a 3-option poll that tallies live when clicked. Warm gold or green accent. Timer at 3:00, click to start.
+Slide 9 — EXIT TICKET (5 min + feedback): 5 short questions testing this lesson’s objectives — fill-in-the-blank for terminology subjects, or 5 quick numeric/symbolic/chem items for maths and science. Each has its own box with profile-appropriate validation. Instruction: “Use at least 1 key term per answer” (or “Show units in every answer” for numeric lessons). Note: “Feedback: teacher reviews exit responses and students may explain their thinking.” Timer at 5:00. Model answers in the locked toggle (unlocks after all 5 are submitted).
+Slide 10 — REFLECTION (5 min): 3-2-1 — 3 things you learned, 2 things you want to explore further, 1 thing you are still unsure about — three boxes with minimum word counts. Timer at 5:00. Include the completion summary here: estimated Main Activity score out of 10, answers submitted, keywords actually used, and for numeric lessons the count of items correct first time.
+
+9. DESIGN RULES
+One consistent colour scheme; DOK badges colour coded (DOK1 green, DOK2 blue, DOK3 amber, DOK4 red); persistent reference bar on every slide; minimal text with large smart-board fonts; a click-to-start timer on every timed slide; model answers only inside locked collapsible toggles; smooth transitions; responsive full-screen layout with no overlapping elements; strong colour contrast and colour never the only signal (pair each objective colour with the word ALL/MOST/SOME and each DOK colour with its number); completion summary at the end.
+
+10. TIMING
+50-minute period — Keywords & Objectives 2 min, Starter 5 min, Main Teaching 10 min, Main Activity 10 min, Connection Link 3 min, Exit Ticket 5 min, Reflection 5 min, plus 10 minutes reserved across the Starter, Main Activity and Exit Ticket for teacher feedback and for students to explain or defend their work.
+
+11. SELF-CHECK BEFORE YOU FINISH
+State briefly that you have verified: exactly 10 slides; nothing overlaps at 1366×768; every timer starts only on click; arrow keys inert while typing; every model-answer toggle locked until submission; each DOK marked on submit with a live total out of 10 and teacher override; every answer box validated by its declared type with a specific rejection reason; math/chem/code/RTL features present and working offline as required by the subject profile.

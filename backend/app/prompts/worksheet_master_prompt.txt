@@ -1,0 +1,129 @@
+Master Prompt — Interactive HTML Worksheet (v1, all subjects)
+Reusable template for any subject and grade — companion to the Lesson Deck prompt
+Table of Contents
+Companion to the Interactive Lesson Deck prompt. Same lesson framework — keywords, ALL/MOST/SOME, DOK 1–4 worth 10 marks, connection link, exit ticket, reflection — but delivered as a single scrolling worksheet a student works through, rather than a presented deck.
+Fill in: [TOPIC NAME] · [SUBJECT] · [GRADE] · [WEEK X] · [PREVIOUS LESSON TOPIC] (Leave keywords blank and write “guess the keywords yourself”. Leave SUBJECT PROFILE values blank and Claude will infer them from the subject.)
+
+Build a single self-contained interactive HTML worksheet for [TOPIC NAME] — [SUBJECT], Grade [GRADE], Week [WEEK X]. Previous lesson: [PREVIOUS LESSON TOPIC]. Guess the 5–6 lesson keywords yourself from the topic.
+One HTML file, no required external dependencies, runs by opening the file in any browser, works offline, and works on a laptop, tablet and phone. Unlike a slide deck this is one continuous scrolling page divided into numbered sections, so a student can work through it independently, at their own pace, in class or as homework. Students type and submit answers directly into the worksheet. Every timed section has a timer that only starts on a click — never automatically, never on typing. Designed for a 50-minute period, including 10 minutes reserved across the Starter, Main Task and Exit Ticket for teacher feedback and for students to explain or defend their work. It must also print cleanly on A4 as a paper worksheet.
+
+1. SUBJECT PROFILE (set this first — it drives all validation)
+Before writing any HTML, state a subject profile as a JS config object at the top of the file, then build every answer box to obey it. Infer sensible values from [SUBJECT] and [TOPIC NAME]:
+const PROFILE = {
+  subject:'[SUBJECT]', grade:'[GRADE]', week:'[WEEK X]', topic:'[TOPIC NAME]',
+  lang:'en',            // 'en' | 'ar' | 'fr' | 'es' | 'ur' | 'hi' …
+  dir:'ltr',            // 'rtl' for Arabic/Urdu — flips the whole layout
+  math:false,           // true → math rendering + symbol palette
+  chem:false,           // true → chemical formula & equation checking
+  code:false,           // true → code-structure checking
+  mode:'lesson',        // 'lesson' (timers shown) | 'homework' (timers hidden, self-paced)
+  defaultAnswerType:'prose'
+};
+Answer types — every response box declares one via data-type. Validation, feedback wording and marking all switch on it:
+data-type
+Use for
+Accepted when
+prose
+explanations, evaluation, reflection
+min word count + min key-term matches + not gibberish
+numeric
+maths, physics, chemistry calculations
+value matches answer key within tolerance, correct units if required
+symbolic
+algebra, formulae, expressions
+normalised form matches any accepted form
+chem
+formulae and balanced equations
+element-aware match, or atom counts balance both sides
+code
+programming
+required structures/tokens present, not prose length
+short
+fill-in-the-blank, single terms, dates
+matches answer key or accepted synonyms (normalised)
+checklist
+PE, Art, Design, practical/performance work
+required boxes ticked + short justification meeting min words
+mixed
+working + explanation together
+numeric/symbolic part correct AND prose part meets min words
+Per-box attributes: data-type · data-min (min words, prose only) · data-kw (min key terms) · data-answer (pipe-separated accepted answers) · data-tol (tolerance, absolute or 5%) · data-units · data-sf (significant figures) · data-must (required tokens for code/chem) · data-lang · data-dok and data-max on Main Task boxes · data-hint (see Guided Practice).
+
+2. VALIDATION RULES BY TYPE
+Universal: blank is always rejected. Each box has a live meter showing what is still required (words, key terms, units, ticked items) and, on Submit, gives a specific reason for rejection — never a generic “wrong”.
+prose — reject if below data-min words, below data-kw key-term matches, or gibberish (repeated character runs of 4+, a majority of tokens with no vowel, no recognisable word tokens). Apply the vowel-based gibberish test only to Latin-script prose.
+numeric — parse robustly: strip spaces, thousand separators, currency symbols and trailing units; treat 1/2, 0.5, 50%, 2^3, 2e3, −, and Arabic-Indic digits ٠١٢٣٤٥٦٧٨٩ as equivalents. Compare to data-answer within data-tol (default 1%, exact for integers). If data-units is set, a right number with missing or wrong units is partial, not full. If data-sf is set, check significant figures and say so. Never judge a numeric answer by word count.
+symbolic — normalise before comparing: strip whitespace, *→×, sqrt(x)→√x, pi→π, <=→≤, >=→≥, !=→≠, handle ^ powers, remove redundant outer brackets, and sort additive terms so 2y+3x equals 3x+2y. Hold several accepted forms in data-answer (e.g. y=2x+3|y=3+2x). Where full equivalence can’t be checked reliably, report “form accepted — teacher to verify” rather than claiming certainty.
+chem — element symbols are case-sensitive (Co ≠ CO); accept H2O, H₂O, H_2O; accept state symbols (s) (l) (g) (aq); accept ->, →, ⇌, = as arrows. For balancing, parse both sides, count atoms per element and check charge, then report which element is unbalanced. Never gibberish-test formulae.
+code — check the structures in data-must (e.g. class,def,__init__,self,return), indentation presence and a runnable-looking statement; ignore word count and never gibberish-test code. Report which required element is missing.
+short — normalise case, trim, collapse spaces, strip accents/diacritics for Latin languages (élève = eleve), match against data-answer synonyms. One-word answers are valid.
+checklist — tick boxes plus one short justification; accepted when the required number are ticked and the justification meets data-min. Use for PE, Art, Design, drama, music, or any lesson whose real output is a performance or artefact.
+mixed — both parts must pass, and feedback must say which part failed.
+
+3. LANGUAGE, SCRIPT AND RTL HANDLING
+Set <html lang> and dir from PROFILE. When dir:'rtl', mirror the whole worksheet — sticky header, section numbering, progress bar, DOK badges, tables and objective colour bars — but keep code blocks, formulae and numbers in dir:'ltr' islands so they don’t reverse. Tab order must follow reading order.
+Script-aware word counting: Arabic ؀-ۿ, Urdu, Hindi ऀ-ॿ, and Chinese/Japanese (characters ÷ 2 as an approximate word equivalent). Do not rely on Latin-only regex.
+Arabic normalisation before comparison: strip tashkeel ً-ْ, remove tatweel ـ, unify alef أ إ آ ٱ → ا, ى → ي, ة → ه, unify hamza forms, convert Arabic-Indic digits to Western.
+French/Spanish/Urdu: accent-insensitive comparison for short answers, correct accents kept in model answers.
+Keywords and objectives appear in the language of instruction; for bilingual classes show term + translation in the same chip.
+Never apply the English vowel gibberish test to non-Latin script — detect only repeated-character runs and single-character spam there.
+
+4. MATH AND FORMULA RENDERING (offline-safe)
+Primary: write all display maths as inline MathML or Unicode (x², √, ≤, π, ∫, Σ, θ, °, ½, →) using <sup>/<sub> and CSS fraction spans — zero dependencies, renders everywhere.
+Optional upgrade: if PROFILE.math, attempt MathJax from CDN purely as progressive enhancement, wrapped so failure is silent and the MathML fallback stays visible. Never show raw $...$ or a blank gap offline.
+Symbol palette: on every numeric, symbolic and mixed box in a maths or science worksheet, show a small insert-at-cursor row — √ x² x³ ^ π ≤ ≥ ≠ × ÷ ± ° θ Δ Σ ∫ ( ) / fraction (plus → ⇌ (s) (l) (g) (aq) when PROFILE.chem). Clicking inserts at the caret and keeps focus. Also accept typed ASCII equivalents (sqrt, ^2, pi, <=, ->) so a plain keyboard never blocks a student.
+Every maths question gets a large working-out box (method) plus a separate single-line final answer box, marked separately.
+
+5. WORKSHEET LAYOUT, NAVIGATION AND NO-OVERLAP RULES
+This is a scrolling document, not a deck. Enforce all of the following:
+One vertical column, max width ~1100px, centred, generous white space; each section is a numbered card with a coloured left border and a clear heading (e.g. “Section 3 · Starter · 5 min · 2 marks”).
+Sticky header at the top holding the worksheet title, the keyword strip, the shortened ALL/MOST/SOME objectives, a live progress bar (sections completed / total), the running mark out of 10, and a collapse toggle. It must be slim (two compact rows maximum), must collapse to a single row on scroll or on demand, and must never cover section content — offset the content by the header’s measured height in JS, recalculated on load, on resize and on collapse. Do not hard-code the offset.
+A section jump menu (a row of numbered chips or a slim side rail) that scrolls smoothly to any section, with completed sections ticked green and the current one highlighted. Use scroll-margin-top equal to the sticky header height so a jumped-to heading is never hidden underneath it.
+Nothing overlaps: only the header (and optional side rail) may be sticky; everything else is normal flow. Text wraps and is never clipped; no fixed heights on text containers; long formulae, tables and code scroll inside their own box rather than widening the page.
+clamp() font sizes; single column below 900px; touch targets at least 44px so it works on a tablet; text inputs must not trigger zoom on iOS (16px minimum font size).
+Keyboard-friendly: Tab moves through boxes in reading order, Ctrl/Cmd+Enter submits the focused box, and no keyboard shortcut hijacks normal typing.
+Print/PDF stylesheet (@media print) — A4 portrait, page-break-inside avoided within a section, sticky header printed once as a plain masthead, jump menu and buttons hidden, all collapsed content expanded except model answers, and typed answers printed as they are. Include two buttons: Print my completed worksheet and Print blank copy (the second replaces every input with ruled writing lines so the teacher can hand out paper copies).
+
+6. PERSISTENT REFERENCE PANEL
+The keyword strip and the three differentiated objectives — ALL (green), MOST (yellow), SOME (blue) — must be visible or one tap away at all times: in the sticky header when collapsed, and repeated in full inside Section 2. Colour must never be the only signal — always pair the colour with the word ALL / MOST / SOME. In maths and science worksheets the strip may include a key formula chip; in language worksheets show term + translation.
+
+7. MODEL ANSWERS AND HINTS — LOCKED UNTIL THE STUDENT RESPONDS
+Every model answer sits inside a collapsible toggle that starts locked and unopenable. While locked it reads “🔒 Submit your answer first to unlock the model answer” and clicking does nothing — it must not open, even briefly.
+A section’s toggle unlocks only when that section’s boxes have been accepted (all items in the Exit Ticket; all four DOK responses before the Main Task model answers unlock).
+Once unlocked it reads “Reveal model answer” and stays closed by default.
+Include a small teacher override (“Teacher: unlock all answers”) for whole-class feedback, and keep model answers out of the student print unless the teacher override is active.
+Hints are different from answers: data-hint gives up to two staged hints per Guided Practice and Main Task item. A hint gives the next step or the formula to use, never the answer, and using a hint is logged and shown in the summary (“2 hints used”) without reducing the mark.
+
+8. WORKSHEET STRUCTURE (exactly 10 sections)
+Section 1 — HEADER: [TOPIC NAME], subject, grade, week; fields for Student name, Class and Date (these appear on the printout and in the downloaded answer file); a one-line “How to use this worksheet” instruction; and the time guide for the 50 minutes.
+Section 2 — KEYWORDS & OBJECTIVE (2 min): keywords as a prominent vocabulary strip with a one-line definition revealed on click; the full lesson objective in one sentence; the full ALL / MOST / SOME success criteria in student-friendly “I can…” language, colour coded green / yellow / blue.
+Section 3 — STARTER / RETRIEVAL (5 min + feedback): one open-ended review question about [PREVIOUS LESSON TOPIC] plus two quick recall items of the profile-appropriate type. Timer at 5:00, click to start. Instruction: “Your answer must use at least 1 key term from this lesson.” Note: “Feedback: teacher reviews responses and students may explain their answers.” Model answer in the locked toggle.
+Section 4 — KNOWLEDGE BOX / WORKED EXAMPLE (I DO): the topic explained in 3 clear parts with one labelled diagram or simple interactive visual, and one fully worked example presented as a step-through (each step revealed by clicking “Next step”, with the reasoning stated for each step). Minimal text, visuals dominant. This section is the student’s reference while they work — it must stay available, not disappear.
+Section 5 — GUIDED PRACTICE (WE DO): 2–3 scaffolded items rising in difficulty, each with a partially completed frame or sentence starter, a staged hint button (data-hint), and instant validation. Not marked towards the 10 — this is practice, and feedback should coach (“You have the right method; check your units”).
+Section 6 — MAIN TASK (10 min + feedback, 10 marks): one differentiated task covering DOK 1 Recall (2 marks), DOK 2 Skill (3 marks), DOK 3 Application (3 marks), DOK 4 Evaluation (2 marks), with topic-appropriate questions at each level and a coloured DOK badge on each (DOK1 green, DOK2 blue, DOK3 amber, DOK4 red). Choose answer types per question — typically short/numeric for DOK 1, numeric/symbolic/code/mixed for DOK 2, mixed for DOK 3, prose for DOK 4. Instruction: “Answers must include at least 2 key terms” for prose parts; for numeric or symbolic parts require correct method and units instead, and say so on screen. Timer at 10:00, click to start. Note: “Feedback: teacher gives feedback on responses and students may defend their work.”
+Section 7 — MARK SCHEME & FEEDBACK: the rubric table, the student’s live marks, and the teacher override. See Section 9 below for the marking behaviour, which is mandatory.
+Section 8 — CONNECTION LINK (3 min) — TEACHER’S/STUDENT’S CHOICE: three tabs — “UAE Link”, “AI Link”, “Cross-Curricular Link”; clicking one reveals that version and hides the others. Generate all three: (1) UAE Link — one sentence connecting the topic to life, industry or culture in the UAE; (2) AI Link — one sentence on how AI or emerging technology relates to or is transforming this topic; (3) Cross-Curricular Link — one sentence connecting the topic to another school subject. Each has a short response box and a 3-option poll that tallies live when clicked. Warm gold or green accent so the section stands out. Timer at 3:00, click to start.
+Section 9 — EXIT TICKET (5 min + feedback): 5 short items testing this lesson’s objectives — fill-in-the-blank for terminology subjects, or 5 quick numeric/symbolic/chem items for maths and science — each with its own validated box. Instruction: “Use at least 1 key term per answer” (or “Show units in every answer” for numeric lessons). Note: “Feedback: teacher reviews exit responses and students may explain their thinking.” Timer at 5:00. Model answers in the locked toggle, unlocking after all 5 are submitted.
+Section 10 — REFLECTION, SELF-ASSESSMENT & SUBMIT (5 min): 3-2-1 boxes (3 things you learned, 2 to explore further, 1 you are unsure about) with minimum word counts; a self-assessment where the student ticks which of ALL / MOST / SOME they have met and justifies it in one sentence; one optional extension challenge aimed at SOME (marked but outside the 10); and the completion summary and submit controls (Section 10 of the design rules below).
+
+9. MARKING, FEEDBACK AND THE RUBRIC (mandatory behaviour)
+The moment a Main Task response is accepted, mark it against the rubric and show, next to that question: the rubric level awarded (0–3), the descriptor matched (e.g. “Mostly correct”) and the marks earned out of that DOK’s maximum. Mirror every mark into a “Your mark” column in the Section 7 rubric table, update a running total out of 10 live in both the rubric header and the sticky header, and flag which criteria are still unmarked.
+Marking basis depends on answer type: correctness against the answer key for numeric, symbolic, chem, short and code (full marks = correct with valid method, units and structure; partial = right method wrong value, or right value with wrong units or significant figures; low = attempt only); depth, key-term coverage and reasoning for prose and the prose half of mixed; ticked criteria plus justification for checklist. Label the total “estimated — teacher’s mark is final” and give the teacher a 0/1/2/3 override selector per DOK that recalculates the total instantly.
+Feedback wording must be specific and actionable (“Right value, but the unit is missing — add m/s²”), never just “incorrect”.
+MAIN TASK MARKING RUBRIC (10 marks total): DOK 1 Knowledge/Recall — 3: Correct, uses key terms, 2: Mostly correct, 1: Partial, 0: Blank or gibberish — /2. DOK 2 Skill/Accuracy — 3: Fully correct and explained, 2: Mostly correct, 1: Partial and weak, 0: Blank or gibberish — /3. DOK 3 Application — 3: Clear reasoning, 2: Mostly applied, 1: Partial, 0: Blank or gibberish — /3. DOK 4 Evaluation — 3: Well-justified, 2: Reasonable, 1: Limited, 0: Blank or gibberish — /2. TOTAL — /10.
+
+10. SAVING, SUBMITTING AND THE COMPLETION SUMMARY
+Completion summary in Section 10: estimated Main Task score out of 10, sections completed out of 10, answers submitted, which of the 6 keywords the student actually used (ticked chips), hints used, items correct first time (for numeric subjects), and the self-assessed ALL/MOST/SOME level.
+Download my answers — a button that builds a text or HTML file client-side with a Blob and downloads it, containing the student’s name, class, date, every question with the student’s answer, each mark awarded, the total, and the timestamp. This is how the student submits by email or upload.
+Print my completed worksheet and Print blank copy as described in the layout rules.
+Draft protection: attempt a lightweight autosave of typed answers so an accidental refresh does not lose work, wrapped in try/catch so the worksheet still works perfectly if storage is unavailable or blocked. Show a small “Draft saved” note and a “Clear my work” button that asks for confirmation. Never make any feature depend on storage succeeding.
+Nothing is ever sent anywhere — state on the worksheet that all answers stay on the student’s own device.
+
+11. DESIGN RULES
+One consistent colour scheme; numbered section cards with coloured left borders; DOK badges colour coded (DOK1 green, DOK2 blue, DOK3 amber, DOK4 red) and always paired with the number; ALL/MOST/SOME always paired with their word; large readable fonts with generous line spacing suitable for reading on a tablet and on paper; a click-to-start timer on every timed section (hidden entirely when mode:'homework'); model answers only inside locked collapsible toggles; smooth scrolling and gentle reveal animations only — no animation that delays reading; strong colour contrast; no overlapping elements at any width; clean A4 print output.
+
+12. TIMING
+50-minute period — Keywords & Objectives 2 min, Starter 5 min, Knowledge Box + Guided Practice 10 min, Main Task 10 min, Connection Link 3 min, Exit Ticket 5 min, Reflection 5 min, plus 10 minutes reserved across the Starter, Main Task and Exit Ticket for teacher feedback and for students to explain or defend their work. Show the suggested minutes on each section heading. In homework mode hide the timers and show only the total expected time.
+
+13. SELF-CHECK BEFORE YOU FINISH
+State briefly that you have verified: exactly 10 sections; the sticky header never covers content and jump links land correctly at any width; nothing overlaps at 1366×768 and on a 390px-wide phone; every timer starts only on click; every model-answer toggle locked until submission, with hints separate from answers; each DOK marked on submit with a live total out of 10 and a working teacher override; every answer box validated by its declared type with a specific, actionable rejection reason; download, print-completed and print-blank all produce correct output; math/chem/code/RTL features present and working offline as required by the subject profile.

@@ -1,7 +1,7 @@
 import io
 
 import qrcode
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -39,11 +39,18 @@ def get_session(session_id: str, teacher: dict = Depends(get_current_teacher)):
     session = store.get_session(session_id)
     if not session or session["teacher_id"] != teacher["id"]:
         raise HTTPException(status_code=404, detail="Session not found")
+    activity = store.get_activity(session["activity_id"])
+    responses = store.list_responses(session_id)
+    current_stage = None
+    if activity and session["current_stage_index"] >= 0:
+        current_stage = activity["manifest"]["stages"][session["current_stage_index"]]
     return {
         "session": {**session, "join_url": _join_url(session["code"])},
-        "activity": store.get_activity(session["activity_id"]),
+        "activity": activity,
         "students": store.list_students(session_id),
-        "responses": store.list_responses(session_id),
+        "responses": responses,
+        "current_stage": current_stage,
+        "online_student_ids": list(manager.online_student_ids(session["code"])),
     }
 
 
@@ -81,8 +88,10 @@ class JoinRequest(BaseModel):
 
 class ResponseRequest(BaseModel):
     student_id: str
+    stage_id: str | None = None
     correct: bool | None = None
     answer: str = ""
+    mark: float | None = None
 
 
 @router.get("/join/{code}")
@@ -91,7 +100,13 @@ def get_session_by_code(code: str):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found. Check the code and try again.")
     activity = store.get_activity(session["activity_id"])
-    return {"session": session, "activity": {"id": activity["id"], "title": activity["title"]}}
+    manifest = activity["manifest"]
+    current_stage = manifest["stages"][session["current_stage_index"]] if session["current_stage_index"] >= 0 else None
+    return {
+        "session": session,
+        "activity": {"id": activity["id"], "title": activity["title"], "manifest": manifest},
+        "current_stage": current_stage,
+    }
 
 
 @router.post("/join/{code}")
@@ -111,18 +126,30 @@ async def submit_response(code: str, payload: ResponseRequest):
     session = store.get_session_by_code(code.upper())
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    response = store.add_response(session["id"], payload.student_id, payload.correct, payload.answer)
+    activity = store.get_activity(session["activity_id"])
+    stage_id = payload.stage_id
+    if not stage_id:
+        stages = activity["manifest"]["stages"]
+        stage_index = session["current_stage_index"] if session["current_stage_index"] >= 0 else 0
+        stage_id = stages[stage_index]["id"]
+    response = store.add_response(session["id"], payload.student_id, stage_id, payload.correct, payload.answer, payload.mark)
     await manager.broadcast(session["code"], {"type": "response_submitted", "response": response})
     return response
 
 
 @router.websocket("/ws/session/{code}")
-async def session_ws(websocket: WebSocket, code: str):
+async def session_ws(websocket: WebSocket, code: str, student_id: str | None = Query(default=None)):
     code = code.upper()
-    await manager.connect(code, websocket)
+    role = "student" if student_id else "teacher"
+    await manager.connect(code, websocket, role, student_id)
+    if role == "student":
+        await manager.broadcast(code, {"type": "student_online", "student_id": student_id})
     try:
         while True:
-            # Teacher dashboard doesn't send anything; this just keeps the socket alive.
+            # Neither side sends anything over this socket today; it's just kept
+            # alive so the backend can push stage/response events to it.
             await websocket.receive_text()
     except WebSocketDisconnect:
         manager.disconnect(code, websocket)
+        if role == "student":
+            await manager.broadcast(code, {"type": "student_offline", "student_id": student_id})

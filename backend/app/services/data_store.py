@@ -56,7 +56,7 @@ class DataStore:
 
     # --- Activities ---------------------------------------------------
 
-    def create_activity(self, teacher_id, title, subject, grade, activity_type, html, source) -> dict:
+    def create_activity(self, teacher_id, title, subject, grade, activity_type, html, source, manifest) -> dict:
         with self._lock:
             activity = {
                 "id": _id(),
@@ -67,6 +67,7 @@ class DataStore:
                 "activity_type": activity_type,
                 "html": html,
                 "source": source,
+                "manifest": manifest,
                 "created_at": _now(),
             }
             self.activities[activity["id"]] = activity
@@ -94,6 +95,13 @@ class DataStore:
                 "status": "active",
                 "created_at": _now(),
                 "ended_at": None,
+                # Classroom Engine stage state. current_stage_index == -1 means
+                # the lesson hasn't been started yet (teacher hasn't clicked
+                # "Start Stage 1" / "Start Next Stage").
+                "current_stage_index": -1,
+                "stage_status": "idle",  # "idle" | "running" | "ended"
+                "stage_started_at": None,
+                "stage_duration_seconds": None,
             }
             self.sessions[session["id"]] = session
             return session
@@ -113,6 +121,29 @@ class DataStore:
         session["status"] = "ended"
         session["ended_at"] = _now()
         return session
+
+    # --- Stage engine ---------------------------------------------------
+
+    def start_stage(self, session_id: str, stage_index: int, duration_seconds: int) -> dict:
+        with self._lock:
+            session = self.sessions[session_id]
+            session["current_stage_index"] = stage_index
+            session["stage_status"] = "running"
+            session["stage_started_at"] = _now()
+            session["stage_duration_seconds"] = duration_seconds
+            return session
+
+    def end_stage(self, session_id: str) -> dict:
+        with self._lock:
+            session = self.sessions[session_id]
+            session["stage_status"] = "ended"
+            return session
+
+    def extend_stage(self, session_id: str, additional_seconds: int) -> dict:
+        with self._lock:
+            session = self.sessions[session_id]
+            session["stage_duration_seconds"] = (session.get("stage_duration_seconds") or 0) + additional_seconds
+            return session
 
     # --- Students ---------------------------------------------------
 
@@ -135,14 +166,24 @@ class DataStore:
 
     # --- Responses ---------------------------------------------------
 
-    def add_response(self, session_id: str, student_id: str, correct: bool | None, answer: str) -> dict:
+    def add_response(
+        self,
+        session_id: str,
+        student_id: str,
+        stage_id: str,
+        correct: bool | None,
+        answer: str,
+        mark: float | None = None,
+    ) -> dict:
         with self._lock:
             response = {
                 "id": _id(),
                 "session_id": session_id,
                 "student_id": student_id,
+                "stage_id": stage_id,
                 "correct": correct,
                 "answer": answer,
+                "mark": mark,
                 "submitted_at": _now(),
             }
             self.responses[response["id"]] = response
