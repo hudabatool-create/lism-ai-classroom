@@ -37,8 +37,18 @@ class Settings(BaseSettings):
     # than localStorage or a response body. `cookie_secure` must be true for any
     # deployment served over HTTPS -- it's false by default only so local dev
     # over plain http still works (browsers drop `Secure` cookies over http).
+    #
+    # `cookie_samesite` stays "lax" for local dev, where frontend (:3000) and
+    # backend (:8000) are different ports of the same host -- browsers treat
+    # that as same-site regardless of port. In production, Vercel and Railway
+    # put the frontend and backend on two genuinely different domains, which
+    # is cross-site: a "lax" cookie silently never gets attached to those
+    # requests. Set COOKIE_SAMESITE=none (together with COOKIE_SECURE=true --
+    # browsers reject SameSite=None cookies without Secure) once frontend and
+    # backend are deployed to different domains.
     jwt_cookie_name: str = "lism_session"
     cookie_secure: bool = False
+    cookie_samesite: str = "lax"
 
     frontend_origin: str = "http://localhost:3000"
 
@@ -72,5 +82,16 @@ def _resolve_jwt_secret(configured: str | None) -> str:
     return generated
 
 
+def _validate_cookie_settings(samesite: str, secure: bool) -> None:
+    if samesite.lower() == "none" and not secure:
+        logger.warning(
+            "COOKIE_SAMESITE=none requires COOKIE_SECURE=true -- browsers silently drop SameSite=None cookies "
+            "that aren't also Secure, which would make every login appear to fail with no server-side error. "
+            "Set COOKIE_SECURE=true (only safe once the app is served over HTTPS, which Vercel/Railway do by "
+            "default)."
+        )
+
+
 settings = Settings()
 settings.jwt_secret = _resolve_jwt_secret(settings.jwt_secret)
+_validate_cookie_settings(settings.cookie_samesite, settings.cookie_secure)

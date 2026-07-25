@@ -54,12 +54,16 @@ def _send_verification_email(teacher: dict) -> None:
 def _set_session_cookie(response: Response, token: str) -> None:
     # httpOnly so an XSS payload can't read the token off document.cookie and
     # exfiltrate it -- the browser attaches it to same-site requests itself.
+    # samesite/secure come from settings so the exact same code works across
+    # local dev (frontend/backend share "localhost", lax is fine) and a real
+    # deployment (frontend and backend on different domains -- needs
+    # samesite=none + secure=true, see config.py).
     response.set_cookie(
         key=settings.jwt_cookie_name,
         value=token,
         httponly=True,
         secure=settings.cookie_secure,
-        samesite="lax",
+        samesite=settings.cookie_samesite,
         max_age=settings.jwt_expire_minutes * 60,
         path="/",
     )
@@ -101,8 +105,14 @@ def login(payload: LoginRequest, response: Response):
 @router.post("/logout")
 def logout(response: Response):
     # The cookie is httpOnly, so the frontend can't clear it itself -- it has
-    # to ask the server to send back a Set-Cookie that expires it.
-    response.delete_cookie(key=settings.jwt_cookie_name, path="/")
+    # to ask the server to send back a Set-Cookie that expires it. Browsers
+    # only clear a cookie if these attributes match how it was set.
+    response.delete_cookie(
+        key=settings.jwt_cookie_name,
+        path="/",
+        secure=settings.cookie_secure,
+        samesite=settings.cookie_samesite,
+    )
     return {"ok": True}
 
 
