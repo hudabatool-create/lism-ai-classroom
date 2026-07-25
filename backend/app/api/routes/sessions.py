@@ -48,7 +48,9 @@ def get_session(session_id: str, teacher: dict = Depends(get_current_teacher)):
     statuses = compute_student_statuses(session, activity)
     return {
         "session": {**session, "join_url": _join_url(session["code"])},
-        "activity": activity,
+        # Strip raw asset bytes (from a ZIP-uploaded activity) -- they can't
+        # be JSON-serialized and the teacher dashboard doesn't need them.
+        "activity": {k: v for k, v in activity.items() if k != "assets"} if activity else None,
         "students": store.list_students(session_id),
         "responses": responses,
         "current_stage": current_stage,

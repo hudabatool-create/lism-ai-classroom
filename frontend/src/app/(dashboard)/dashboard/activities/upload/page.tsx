@@ -19,7 +19,7 @@ export default function UploadActivityPage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!file) {
-      setError("Choose an .html file to upload");
+      setError("Choose an .html or .zip file to upload");
       return;
     }
     setLoading(true);
@@ -44,8 +44,9 @@ export default function UploadActivityPage() {
     <div className="max-w-2xl">
       <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Upload HTML Activity</h1>
       <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-        Upload an activity built with ChatGPT, Claude, Gemini, Copilot, or hand-coded HTML. LISM hosts it for you
-        &mdash; no deployment needed.
+        Upload an activity built with ChatGPT, Claude, Gemini, Copilot, or hand-coded HTML &mdash; a single .html
+        file, or a .zip containing an HTML file plus its CSS, JavaScript, and images. LISM hosts it for you &mdash;
+        no deployment needed.
       </p>
 
       <form
@@ -71,14 +72,17 @@ export default function UploadActivityPage() {
           <input value={activityType} onChange={(e) => setActivityType(e.target.value)} className="input" />
         </label>
         <label className="block">
-          <span className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">HTML File</span>
+          <span className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">HTML or ZIP File</span>
           <input
             type="file"
-            accept=".html,.htm"
+            accept=".html,.htm,.zip"
             required
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             className="block w-full text-sm text-slate-600 file:mr-4 file:rounded-lg file:border-0 file:bg-brand-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-brand-700 dark:text-slate-300"
           />
+          <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">
+            For a ZIP, LISM auto-detects index.html (or the first HTML file found) as the entry point.
+          </span>
         </label>
 
         {error && (

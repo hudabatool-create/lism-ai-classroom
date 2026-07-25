@@ -58,7 +58,7 @@ class DataStore:
 
     # --- Activities ---------------------------------------------------
 
-    def create_activity(self, teacher_id, title, subject, grade, activity_type, html, source, manifest) -> dict:
+    def create_activity(self, teacher_id, title, subject, grade, activity_type, html, source, manifest, assets=None) -> dict:
         with self._lock:
             activity = {
                 "id": _id(),
@@ -70,6 +70,10 @@ class DataStore:
                 "html": html,
                 "source": source,
                 "manifest": manifest,
+                # Non-HTML files from a ZIP upload (CSS/JS/images), keyed by
+                # their path relative to the entry HTML. Empty for
+                # single-file HTML uploads and AI-generated activities.
+                "assets": assets or {},
                 "created_at": _now(),
             }
             self.activities[activity["id"]] = activity
