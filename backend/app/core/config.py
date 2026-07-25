@@ -23,6 +23,12 @@ class Settings(BaseSettings):
 
     app_name: str = "LISM AI Classroom API"
 
+    # Real persistence: defaults to a local SQLite file so the app works with
+    # zero setup and survives restarts. Point this at a Postgres URL (e.g. a
+    # Supabase connection string) for public deployment -- the store is plain
+    # SQLAlchemy, so no code changes are needed, just this one value.
+    database_url: str = "sqlite:///./lism.db"
+
     jwt_secret: str | None = None
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60 * 24 * 7

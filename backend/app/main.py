@@ -3,8 +3,18 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import activities, auth, coach, insights, prompts, reports, sessions, stages
 from app.core.config import settings
+from app.db import models  # noqa: F401 -- registers tables on Base.metadata
+from app.db.base import Base, engine
 
 app = FastAPI(title=settings.app_name)
+
+
+@app.on_event("startup")
+def _create_tables():
+    # No migration framework yet (Alembic) -- fine for a scaffold whose
+    # schema isn't expected to change out from under real data yet. Add one
+    # before this app has production data worth migrating carefully.
+    Base.metadata.create_all(bind=engine)
 
 app.add_middleware(
     CORSMiddleware,

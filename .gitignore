@@ -13,6 +13,12 @@ __pycache__/
 *.pyc
 backend/.env
 
+# Local SQLite database (dev/test data, not source)
+backend/*.db
+backend/*.db-journal
+backend/*.db-wal
+backend/*.db-shm
+
 # Dev server logs (local verification runs)
 *.out.log
 *.err.log
