@@ -6,6 +6,10 @@ import Logo from "@/components/Logo";
 import { api } from "@/lib/api";
 import type { LessonManifest, SessionType, Stage } from "@/lib/types";
 
+// Scoped per session code so a shared classroom device doesn't carry one
+// lesson's identity into the next.
+const studentKey = (code: string) => `lism_student_${code.toUpperCase()}`;
+
 interface JoinInfo {
   session: {
     code: string;
@@ -34,6 +38,8 @@ export default function JoinPage() {
   const [warning, setWarning] = useState<string | null>(null);
   const [locked, setLocked] = useState<string | null>(null);
   const [paused, setPaused] = useState(false);
+  const [reconnected, setReconnected] = useState(false);
+  const [submittedCount, setSubmittedCount] = useState(0);
   const [helpSent, setHelpSent] = useState(false);
   const [coachOpen, setCoachOpen] = useState(false);
   const [coachMessages, setCoachMessages] = useState<{ role: "student" | "coach"; content: string }[]>([]);
@@ -44,13 +50,41 @@ export default function JoinPage() {
   const awayRef = useRef(false);
 
   useEffect(() => {
+    let cancelled = false;
     api
       .get<JoinInfo>(`/api/join/${code}`)
-      .then((data) => {
+      .then(async (data) => {
+        if (cancelled) return;
         setInfo(data);
         currentStageRef.current = data.current_stage;
+
+        // Reconnect silently if this device already joined this session.
+        // Without this a refresh or a dropped connection sends the student
+        // back to the name form, and typing a slightly different name would
+        // split their work across two participants.
+        const savedId = localStorage.getItem(studentKey(code));
+        if (!savedId) return;
+        try {
+          const resumed = await api.get<{ student: { id: string }; responses: unknown[] }>(
+            `/api/join/${code}/student/${savedId}`
+          );
+          if (cancelled) return;
+          setStudentId(resumed.student.id);
+          setSubmittedCount(resumed.responses.length);
+          setReconnected(true);
+          setTimeout(() => setReconnected(false), 4000);
+        } catch {
+          // Stale id (old session reusing this browser) -- fall back to the
+          // join form rather than blocking the student.
+          localStorage.removeItem(studentKey(code));
+        }
       })
-      .catch((err) => setError(err instanceof Error ? err.message : "Session not found"));
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Session not found");
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [code]);
 
   async function handleJoin(e: FormEvent) {
@@ -58,8 +92,17 @@ export default function JoinPage() {
     setJoining(true);
     setError(null);
     try {
-      const res = await api.post<{ student: { id: string } }>(`/api/join/${code}`, { name, grade, section });
+      const res = await api.post<{ student: { id: string }; rejoined: boolean; responses: unknown[] }>(
+        `/api/join/${code}`,
+        { name, grade, section }
+      );
+      localStorage.setItem(studentKey(code), res.student.id);
       setStudentId(res.student.id);
+      setSubmittedCount(res.responses.length);
+      if (res.rejoined) {
+        setReconnected(true);
+        setTimeout(() => setReconnected(false), 4000);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not join");
     } finally {
@@ -122,6 +165,7 @@ export default function JoinPage() {
       api
         .post(`/api/join/${code}/response`, { student_id: studentId, stage_id: stageId, correct, answer, mark })
         .then(() => {
+          setSubmittedCount((n) => n + 1);
           setFlash("Response submitted — your teacher can see it live.");
           setTimeout(() => setFlash(null), 3000);
         })
@@ -340,6 +384,12 @@ export default function JoinPage() {
 
   return (
     <div className="relative flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">
+      {reconnected && (
+        <div className="bg-brand-600 px-4 py-2 text-center text-sm font-medium text-white">
+          Welcome back &mdash; you&apos;re back in the same lesson
+          {submittedCount > 0 && `, with your ${submittedCount} answer${submittedCount === 1 ? "" : "s"} saved`}.
+        </div>
+      )}
       {flash && <div className="bg-green-600 px-4 py-2 text-center text-sm font-medium text-white">{flash}</div>}
       {warning && !locked && (
         <div className="bg-amber-500 px-4 py-2 text-center text-sm font-semibold text-white">{warning}</div>

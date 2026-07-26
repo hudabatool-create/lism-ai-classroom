@@ -55,6 +55,12 @@ def _gen_code() -> str:
     return "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
 
 
+def _normalize_name(name: str) -> str:
+    """Identity key for a student within a session: case- and
+    spacing-insensitive, so "Aisha  Khan" and "aisha khan" are one person."""
+    return " ".join(name.split()).lower()
+
+
 # --- Row -> dict serializers ---------------------------------------------------
 
 
@@ -506,8 +512,35 @@ class DataStore:
 
     # --- Students ---------------------------------------------------
 
-    def add_student_to_session(self, session_id: str, name: str, grade: str, section: str) -> dict:
+    def add_student_to_session(self, session_id: str, name: str, grade: str, section: str) -> tuple[dict, bool]:
+        """Find-or-create: one student is one participant for the whole lesson.
+
+        Returns (student, rejoined). A refresh, a dropped connection, a closed
+        browser or simply typing the same name again must put the student back
+        into the participant they already are -- creating a second row would
+        split their answers across two identities and show the teacher the
+        same child twice.
+
+        Matching is on the normalised name within this session. Two different
+        children with the identical full name in one class would share a
+        participant; they need to differentiate (surname or initial), which is
+        the same expectation other classroom tools set.
+        """
+        key = _normalize_name(name)
         with self._lock, SessionLocal() as db:
+            existing = next(
+                (s for s in db.scalars(select(Student).where(Student.session_id == session_id)) if _normalize_name(s.name) == key),
+                None,
+            )
+            if existing is not None:
+                # Keep the latest grade/section if they filled them in this time.
+                if grade:
+                    existing.grade = grade
+                if section:
+                    existing.section = section
+                db.commit()
+                return _student_dict(existing), True
+
             row = Student(
                 id=_id(),
                 session_id=session_id,
@@ -521,7 +554,16 @@ class DataStore:
             )
             db.add(row)
             db.commit()
-            return _student_dict(row)
+            return _student_dict(row), False
+
+    def list_student_responses(self, session_id: str, student_id: str) -> list[dict]:
+        with SessionLocal() as db:
+            rows = db.scalars(
+                select(Response)
+                .where(Response.session_id == session_id, Response.student_id == student_id)
+                .order_by(Response.submitted_at)
+            )
+            return [_response_dict(r) for r in rows]
 
     def list_students(self, session_id: str) -> list[dict]:
         with SessionLocal() as db:

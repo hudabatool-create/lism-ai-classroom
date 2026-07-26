@@ -166,11 +166,37 @@ async def join_session(code: str, payload: JoinRequest):
         raise HTTPException(status_code=404, detail="Session not found. Check the code and try again.")
     if session["status"] != "active":
         raise HTTPException(status_code=400, detail="This session has ended")
-    student = store.add_student_to_session(session["id"], payload.name, payload.grade, payload.section)
-    await manager.broadcast(session["code"], {"type": "student_joined", "student": student}, roles=("teacher",))
+    student, rejoined = store.add_student_to_session(session["id"], payload.name, payload.grade, payload.section)
+    # Only announce genuinely new participants -- a reconnecting student is
+    # already on the teacher's list and shouldn't appear to join twice.
+    if not rejoined:
+        await manager.broadcast(session["code"], {"type": "student_joined", "student": student}, roles=("teacher",))
     activity = store.get_activity(session["activity_id"])
     await broadcast_status_update(session, activity)
-    return {"student": student, "session": session}
+    return {
+        "student": student,
+        "session": session,
+        "rejoined": rejoined,
+        "responses": store.list_student_responses(session["id"], student["id"]),
+    }
+
+
+@router.get("/join/{code}/student/{student_id}")
+def resume_student(code: str, student_id: str):
+    """Lets a returning device prove it already belongs to this session, so a
+    refresh restores the student instead of asking them to type their name and
+    risk becoming a second participant."""
+    session = store.get_session_by_code(code.upper())
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    student = store.get_student_in_session(student_id, session["id"])
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found in this session")
+    return {
+        "student": student,
+        "session": session,
+        "responses": store.list_student_responses(session["id"], student_id),
+    }
 
 
 def active_session_for_student(code: str, student_id: str) -> dict:
