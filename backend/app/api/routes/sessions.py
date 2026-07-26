@@ -46,10 +46,13 @@ def get_session(session_id: str, teacher: dict = Depends(get_current_teacher)):
     # re-query both, doubling the round-trips on the busiest endpoint here.
     responses = store.list_responses(session_id)
     students = store.list_students(session_id)
+    focus_violations = store.list_focus_violations(session_id)
     current_stage = None
     if activity and session["current_stage_index"] >= 0:
         current_stage = activity["manifest"]["stages"][session["current_stage_index"]]
-    statuses = compute_student_statuses(session, activity, students=students, responses=responses)
+    statuses = compute_student_statuses(
+        session, activity, students=students, responses=responses, violations=focus_violations
+    )
     return {
         "session": {**session, "join_url": _join_url(session["code"])},
         # Strip raw asset bytes (from a ZIP-uploaded activity) -- they can't
@@ -61,7 +64,7 @@ def get_session(session_id: str, teacher: dict = Depends(get_current_teacher)):
         "online_student_ids": list(manager.online_student_ids(session["code"])),
         "student_statuses": statuses,
         "status_summary": summarize_statuses(statuses),
-        "focus_violations": store.list_focus_violations(session_id),
+        "focus_violations": focus_violations,
     }
 
 

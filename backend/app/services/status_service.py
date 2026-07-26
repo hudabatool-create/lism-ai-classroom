@@ -16,10 +16,12 @@ def compute_student_statuses(
     activity: dict,
     students: list[dict] | None = None,
     responses: list[dict] | None = None,
+    violations: list[dict] | None = None,
 ) -> dict[str, dict]:
-    """`students`/`responses` are accepted so a caller that already loaded
-    them doesn't pay for the same queries twice -- every query here is a
-    network round-trip, and this function runs after every student action."""
+    """`students`/`responses`/`violations` are accepted so a caller that
+    already loaded them doesn't pay for the same queries twice -- every query
+    here is a network round-trip to the database, and this function runs after
+    every student action."""
     stages = activity["manifest"]["stages"]
     stage_id = None
     if 0 <= session["current_stage_index"] < len(stages):
@@ -32,8 +34,16 @@ def compute_student_statuses(
         students = store.list_students(session["id"])
     responded_current_stage = {r["student_id"] for r in responses if r["stage_id"] == stage_id} if stage_id else set()
 
-    # One grouped query for the whole class, not one per student.
-    violation_counts = store.get_violation_counts(session["id"])
+    if violations is not None:
+        # Caller already has the full violation list (the teacher dashboard
+        # shows it as the Focus Report) -- counting it here avoids a second
+        # trip to the same table.
+        violation_counts: dict[str, int] = {}
+        for violation in violations:
+            violation_counts[violation["student_id"]] = violation_counts.get(violation["student_id"], 0) + 1
+    else:
+        # One grouped query for the whole class, not one per student.
+        violation_counts = store.get_violation_counts(session["id"])
 
     statuses: dict[str, dict] = {}
     for student in students:
