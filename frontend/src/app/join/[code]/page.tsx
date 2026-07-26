@@ -10,12 +10,53 @@ import type { LessonManifest, SessionType, Stage } from "@/lib/types";
 // lesson's identity into the next.
 const studentKey = (code: string) => `lism_student_${code.toUpperCase()}`;
 
+/** The teacher's countdown, mirrored on the student's screen.
+ *
+ * Derived entirely from server-supplied timing (when the stage started and
+ * how long it runs), never from a locally started clock -- so a student who
+ * refreshes mid-stage, or joins late, immediately sees the same time as
+ * everyone else instead of a fresh countdown of their own. Students have no
+ * control over it: there is deliberately no way to start, stop or alter it
+ * from this page.
+ */
+function useStageTimer(startedAt: string | null, durationSeconds: number | null, status: string) {
+  const [remaining, setRemaining] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (durationSeconds == null || (status !== "running" && status !== "paused")) {
+      setRemaining(null);
+      return;
+    }
+    // Paused: the server already banked the time left, so just show it.
+    if (status === "paused") {
+      setRemaining(Math.max(0, durationSeconds));
+      return;
+    }
+    if (!startedAt) return;
+    const endsAt = new Date(startedAt).getTime() + durationSeconds * 1000;
+    const tick = () => setRemaining(Math.max(0, Math.round((endsAt - Date.now()) / 1000)));
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [startedAt, durationSeconds, status]);
+
+  return remaining;
+}
+
+function formatClock(seconds: number) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
 interface JoinInfo {
   session: {
     code: string;
     status: string;
     session_type: SessionType;
     stage_status: "idle" | "running" | "paused" | "ended";
+    stage_started_at: string | null;
+    stage_duration_seconds: number | null;
     copy_paste_protection: boolean;
     focus_monitoring: boolean;
     max_warnings: number;
@@ -40,6 +81,15 @@ export default function JoinPage() {
   const [paused, setPaused] = useState(false);
   const [reconnected, setReconnected] = useState(false);
   const [submittedCount, setSubmittedCount] = useState(0);
+  // Mirrors the teacher's clock. Seeded from the session on load so a late
+  // joiner or a refresh lands mid-countdown correctly, then kept in step by
+  // the stage_started / stage_paused / stage_resumed / stage_ended events.
+  const [timer, setTimer] = useState<{ startedAt: string | null; duration: number | null; status: string }>({
+    startedAt: null,
+    duration: null,
+    status: "idle",
+  });
+  const remainingSeconds = useStageTimer(timer.startedAt, timer.duration, timer.status);
   const [helpSent, setHelpSent] = useState(false);
   const [coachOpen, setCoachOpen] = useState(false);
   const [coachMessages, setCoachMessages] = useState<{ role: "student" | "coach"; content: string }[]>([]);
@@ -57,6 +107,11 @@ export default function JoinPage() {
         if (cancelled) return;
         setInfo(data);
         currentStageRef.current = data.current_stage;
+        setTimer({
+          startedAt: data.session.stage_started_at,
+          duration: data.session.stage_duration_seconds,
+          status: data.session.stage_status,
+        });
 
         // Reconnect silently if this device already joined this session.
         // Without this a refresh or a dropped connection sends the student
@@ -197,18 +252,24 @@ export default function JoinPage() {
       if (msg.type === "stage_started") {
         currentStageRef.current = msg.stage;
         setPaused(false);
+        setTimer({ startedAt: msg.startedAt, duration: msg.durationSeconds, status: "running" });
         sendCommand("start_stage", { stage: msg.stage });
       } else if (msg.type === "stage_ended") {
         setPaused(false);
+        setTimer((t) => ({ ...t, status: "ended" }));
         sendCommand("stage_ended");
+      } else if (msg.type === "timer_extended") {
+        setTimer((t) => ({ ...t, duration: msg.durationSeconds }));
       } else if (msg.type === "stage_paused") {
         // The overlay is what actually stops the student typing; the command
         // lets the activity freeze itself too, so a keyboard-focused input
         // inside the iframe can't keep accepting input behind the overlay.
         setPaused(true);
+        setTimer((t) => ({ ...t, duration: msg.remainingSeconds, status: "paused" }));
         sendCommand("pause");
       } else if (msg.type === "stage_resumed") {
         setPaused(false);
+        setTimer({ startedAt: msg.startedAt, duration: msg.durationSeconds, status: "running" });
         sendCommand("resume");
       } else if (msg.type === "settings_updated") {
         setInfo((prev) =>
@@ -382,8 +443,25 @@ export default function JoinPage() {
     );
   }
 
+  const stageLabel = currentStageRef.current?.label ?? info?.current_stage?.label ?? null;
+
   return (
     <div className="relative flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">
+      {/* The teacher's countdown, mirrored. Read-only by design -- there are
+          deliberately no controls here for the student. */}
+      {remainingSeconds !== null && (
+        <div
+          className={`flex items-center justify-center gap-3 px-4 py-2 text-sm font-medium text-white ${
+            paused ? "bg-amber-500" : remainingSeconds <= 30 ? "bg-red-600" : "bg-slate-800"
+          }`}
+        >
+          {stageLabel && <span className="opacity-90">{stageLabel}</span>}
+          <span className="font-mono text-base font-semibold tabular-nums">{formatClock(remainingSeconds)}</span>
+          <span className="opacity-90">
+            {paused ? "paused by your teacher" : remainingSeconds === 0 ? "time's up — wait for your teacher" : "left"}
+          </span>
+        </div>
+      )}
       {reconnected && (
         <div className="bg-brand-600 px-4 py-2 text-center text-sm font-medium text-white">
           Welcome back &mdash; you&apos;re back in the same lesson
