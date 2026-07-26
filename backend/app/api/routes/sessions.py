@@ -10,6 +10,7 @@ from app.core.config import settings
 from app.core.security import decode_access_token
 from app.services.data_store import store
 from app.services.status_service import broadcast_status_update, compute_student_statuses, summarize_statuses
+from app.services.student_report_service import build_student_report
 from app.services.websocket_manager import manager
 
 router = APIRouter(prefix="/api", tags=["sessions"])
@@ -120,11 +121,15 @@ async def update_session_settings(
 
 
 @router.post("/sessions/{session_id}/end")
-def end_session(session_id: str, teacher: dict = Depends(get_current_teacher)):
+async def end_session(session_id: str, teacher: dict = Depends(get_current_teacher)):
     session = store.get_session(session_id)
     if not session or session["teacher_id"] != teacher["id"]:
         raise HTTPException(status_code=404, detail="Session not found")
-    return store.end_session(session_id)
+    ended = store.end_session(session_id)
+    # Students were previously told nothing when the lesson ended -- they just
+    # sat on a frozen activity. This is what triggers their report.
+    await manager.broadcast(ended["code"], {"type": "session_ended"})
+    return ended
 
 
 # --- Public, student-facing (no login) ---------------------------------------------------
@@ -179,6 +184,21 @@ async def join_session(code: str, payload: JoinRequest):
         "rejoined": rejoined,
         "responses": store.list_student_responses(session["id"], student["id"]),
     }
+
+
+@router.get("/join/{code}/report/{student_id}")
+def student_report(code: str, student_id: str):
+    """The student's own Lesson Progress Report. Public like the rest of the
+    join API -- students never log in -- but scoped to one student in one
+    session, so it can't be used to read a classmate's results."""
+    session = store.get_session_by_code(code.upper())
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    student = store.get_student_in_session(student_id, session["id"])
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found in this session")
+    activity = store.get_activity(session["activity_id"])
+    return build_student_report(session, activity, student)
 
 
 @router.get("/join/{code}/student/{student_id}")

@@ -43,10 +43,46 @@ function useStageTimer(startedAt: string | null, durationSeconds: number | null,
   return remaining;
 }
 
+function ReportTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+      <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
+      <p className="mt-0.5 text-lg font-semibold text-slate-900 dark:text-white">{value}</p>
+    </div>
+  );
+}
+
+function formatDuration(seconds: number) {
+  const m = Math.floor(seconds / 60);
+  if (m < 1) return "under a minute";
+  if (m < 60) return `${m} min`;
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
 function formatClock(seconds: number) {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+interface StudentReport {
+  activity_title: string;
+  subject: string;
+  topic: string;
+  student_name: string;
+  completion_status: string;
+  stages_completed: number;
+  stages_total: number;
+  stage_breakdown: { label: string; completed: boolean }[];
+  estimated_score: number | null;
+  max_score: number | null;
+  responses_submitted: number;
+  answered_correctly: number;
+  auto_graded_count: number;
+  help_requests: number;
+  focus_warnings: number;
+  time_spent_seconds: number | null;
+  teacher_review_message: string;
 }
 
 interface JoinInfo {
@@ -81,6 +117,7 @@ export default function JoinPage() {
   const [paused, setPaused] = useState(false);
   const [reconnected, setReconnected] = useState(false);
   const [submittedCount, setSubmittedCount] = useState(0);
+  const [report, setReport] = useState<StudentReport | null>(null);
   // Mirrors the teacher's clock. Seeded from the session on load so a late
   // joiner or a refresh lands mid-countdown correctly, then kept in step by
   // the stage_started / stage_paused / stage_resumed / stage_ended events.
@@ -271,6 +308,15 @@ export default function JoinPage() {
         setPaused(false);
         setTimer({ startedAt: msg.startedAt, duration: msg.durationSeconds, status: "running" });
         sendCommand("resume");
+      } else if (msg.type === "session_ended") {
+        // The lesson is over: show the student their report before they
+        // leave, rather than leaving them on a frozen activity.
+        setTimer((t) => ({ ...t, status: "ended" }));
+        setPaused(false);
+        api
+          .get<StudentReport>(`/api/join/${code}/report/${studentId}`)
+          .then((r) => setReport(r))
+          .catch(() => setFlash("Your teacher ended the lesson."));
       } else if (msg.type === "settings_updated") {
         setInfo((prev) =>
           prev
@@ -542,6 +588,69 @@ export default function JoinPage() {
               Send
             </button>
           </form>
+        </div>
+      )}
+
+      {/* Highest layer: once the lesson is over this is the only thing that
+          matters, and it should cover a paused or locked overlay. */}
+      {report && (
+        <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-950/95 px-4 py-8">
+          <div className="mx-auto max-w-lg rounded-2xl bg-white p-6 shadow-xl dark:bg-slate-900">
+            <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">Lesson complete</p>
+            <h1 className="mt-1 text-2xl font-semibold text-slate-900 dark:text-white">{report.activity_title}</h1>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              {[report.subject, report.topic].filter(Boolean).join(" · ")}
+            </p>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{report.student_name}</p>
+
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <ReportTile label="Status" value={report.completion_status} />
+              <ReportTile label="Sections completed" value={`${report.stages_completed} of ${report.stages_total}`} />
+              <ReportTile
+                label="Estimated score"
+                value={
+                  report.estimated_score === null
+                    ? "Not scored"
+                    : report.max_score
+                      ? `${report.estimated_score} / ${report.max_score}`
+                      : // Marks were awarded but the activity declares no total.
+                        // Showing "Not scored" here would hide real work.
+                        `${report.estimated_score} mark${report.estimated_score === 1 ? "" : "s"}`
+                }
+              />
+              <ReportTile
+                label="Time spent"
+                value={report.time_spent_seconds !== null ? formatDuration(report.time_spent_seconds) : "—"}
+              />
+            </div>
+
+            <div className="mt-5">
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Your sections</p>
+              <ul className="mt-2 space-y-1">
+                {report.stage_breakdown.map((s) => (
+                  <li key={s.label} className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                    <span className={s.completed ? "text-green-600" : "text-slate-400"}>{s.completed ? "✓" : "○"}</span>
+                    {s.label}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="mt-5">
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Participation</p>
+              <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                {report.responses_submitted} answer{report.responses_submitted === 1 ? "" : "s"} submitted
+                {report.auto_graded_count > 0 &&
+                  ` · ${report.answered_correctly} of ${report.auto_graded_count} correct so far`}
+                {report.help_requests > 0 && ` · asked for help ${report.help_requests}×`}
+                {report.focus_warnings > 0 && ` · ${report.focus_warnings} focus warning${report.focus_warnings === 1 ? "" : "s"}`}
+              </p>
+            </div>
+
+            <p className="mt-5 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+              {report.teacher_review_message}
+            </p>
+          </div>
         </div>
       )}
 

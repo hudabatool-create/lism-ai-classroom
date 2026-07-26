@@ -260,8 +260,18 @@ def _base_manifest(lesson_type: str, subject: str, grade: str, topic: str, stage
     }
 
 
-def _stage(stage_id: str, label: str, stage_type: str, duration: int) -> dict:
-    return {"id": stage_id, "label": label, "type": stage_type, "durationSeconds": duration, "sequentialLock": True}
+def _stage(stage_id: str, label: str, stage_type: str, duration: int, marks: int | None = None) -> dict:
+    """`marks` is the stage's mark total -- 10 on a Main Task, None elsewhere.
+    The student's completion report needs it to show a score out of something
+    rather than a bare mark count."""
+    return {
+        "id": stage_id,
+        "label": label,
+        "type": stage_type,
+        "durationSeconds": duration,
+        "sequentialLock": True,
+        "marks": marks,
+    }
 
 
 def _mcq_section(stage_id: str, heading: str, prompt: str, options: list[tuple[str, bool]]) -> str:
@@ -310,7 +320,7 @@ def _text_section(stage_id: str, heading: str, prompt: str, textarea_id: str) ->
 def _gen_lesson_deck(subject, grade, topic, difficulty, time_limit) -> tuple[dict, str]:
     stages = [
         _stage("starter", "Starter", "starter", 300),
-        _stage("main-activity", "Main Activity", "main-activity", 600),
+        _stage("main-activity", "Main Activity", "main-activity", 600, marks=10),
         _stage("exit-ticket", "Exit Ticket", "exit-ticket", 300),
     ]
     manifest = _base_manifest("lesson-deck", subject, grade, topic, stages)
