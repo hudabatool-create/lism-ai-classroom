@@ -1,9 +1,10 @@
 """Public, student-facing: the AI Learning Coach. No auth -- students never
 log in -- but every message is scoped to a real session + student pair."""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel
 
+from app.api.routes.sessions import active_session_for_student
 from app.services import ai_coach_service
 from app.services.data_store import store
 from app.services.status_service import broadcast_status_update
@@ -27,11 +28,7 @@ class CoachRequest(BaseModel):
 
 @router.post("/{code}/coach")
 async def ask_coach(code: str, payload: CoachRequest):
-    session = store.get_session_by_code(code.upper())
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    if not store.get_student_in_session(payload.student_id, session["id"]):
-        raise HTTPException(status_code=404, detail="Student not found in this session")
+    session = active_session_for_student(code, payload.student_id)
 
     activity = store.get_activity(session["activity_id"])
     manifest = activity["manifest"]

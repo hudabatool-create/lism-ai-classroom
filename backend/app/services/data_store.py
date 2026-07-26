@@ -543,6 +543,23 @@ class DataStore:
                 )
             )
 
+    def get_violation_counts(self, session_id: str) -> dict[str, int]:
+        """Violation counts for every student in the session, in ONE query.
+
+        Calling get_violation_count() per student instead was the dominant
+        cost of the live dashboard: every query is a separate network
+        round-trip to the database, and this is recomputed after *each*
+        student action (join, response, violation, help request), so the
+        per-request cost grew linearly with class size.
+        """
+        with SessionLocal() as db:
+            rows = db.execute(
+                select(FocusViolation.student_id, func.count(FocusViolation.id))
+                .where(FocusViolation.session_id == session_id)
+                .group_by(FocusViolation.student_id)
+            ).all()
+            return {student_id: count for student_id, count in rows}
+
     def is_locked(self, session_id: str, student_id: str) -> bool:
         return self.get_violation_count(session_id, student_id) >= 3
 
@@ -583,6 +600,22 @@ class DataStore:
         with SessionLocal() as db:
             rows = db.scalars(select(Response).where(Response.session_id == session_id).order_by(Response.submitted_at))
             return [_response_dict(r) for r in rows]
+
+    def has_response_for_stage(self, session_id: str, student_id: str, stage_id: str) -> bool:
+        """One answer per student per stage. Without this a student could
+        resubmit the same stage indefinitely -- harmless-looking in a lesson,
+        but it corrupts marks and reports for an assessment."""
+        with SessionLocal() as db:
+            return (
+                db.scalar(
+                    select(Response.id).where(
+                        Response.session_id == session_id,
+                        Response.student_id == student_id,
+                        Response.stage_id == stage_id,
+                    )
+                )
+                is not None
+            )
 
     # --- Prompt Library (custom, teacher-owned prompts only; built-in
     # master prompts are synthesized on read in routes/prompts.py, not

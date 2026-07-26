@@ -102,8 +102,12 @@ export default function JoinPage() {
           setFlash("Response submitted — your teacher can see it live.");
           setTimeout(() => setFlash(null), 3000);
         })
-        .catch(() => {
-          /* most likely locked server-side; the lock overlay already covers this */
+        .catch((err) => {
+          // Show why it was rejected (already answered, session ended, locked)
+          // instead of silently doing nothing, which looked like the submit
+          // button was simply broken.
+          setFlash(err instanceof Error ? err.message : "Could not submit your answer.");
+          setTimeout(() => setFlash(null), 4000);
         });
     },
     [studentId, code, info, locked]

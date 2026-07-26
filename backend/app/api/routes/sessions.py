@@ -42,17 +42,20 @@ def get_session(session_id: str, teacher: dict = Depends(get_current_teacher)):
     if not session or session["teacher_id"] != teacher["id"]:
         raise HTTPException(status_code=404, detail="Session not found")
     activity = store.get_activity(session["activity_id"])
+    # Loaded once and passed down -- compute_student_statuses would otherwise
+    # re-query both, doubling the round-trips on the busiest endpoint here.
     responses = store.list_responses(session_id)
+    students = store.list_students(session_id)
     current_stage = None
     if activity and session["current_stage_index"] >= 0:
         current_stage = activity["manifest"]["stages"][session["current_stage_index"]]
-    statuses = compute_student_statuses(session, activity)
+    statuses = compute_student_statuses(session, activity, students=students, responses=responses)
     return {
         "session": {**session, "join_url": _join_url(session["code"])},
         # Strip raw asset bytes (from a ZIP-uploaded activity) -- they can't
         # be JSON-serialized and the teacher dashboard doesn't need them.
         "activity": {k: v for k, v in activity.items() if k != "assets"} if activity else None,
-        "students": store.list_students(session_id),
+        "students": students,
         "responses": responses,
         "current_stage": current_stage,
         "online_student_ids": list(manager.online_student_ids(session["code"])),
@@ -131,13 +134,24 @@ async def join_session(code: str, payload: JoinRequest):
     return {"student": student, "session": session}
 
 
-@router.post("/join/{code}/response")
-async def submit_response(code: str, payload: ResponseRequest):
+def active_session_for_student(code: str, student_id: str) -> dict:
+    """Shared gate for every student-facing write: the session must exist, be
+    still running, and actually contain this student. A student sitting on a
+    stale page after the teacher ended the lesson must not keep writing to it.
+    """
     session = store.get_session_by_code(code.upper())
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    if not store.get_student_in_session(payload.student_id, session["id"]):
+    if session["status"] != "active":
+        raise HTTPException(status_code=400, detail="This session has ended")
+    if not store.get_student_in_session(student_id, session["id"]):
         raise HTTPException(status_code=404, detail="Student not found in this session")
+    return session
+
+
+@router.post("/join/{code}/response")
+async def submit_response(code: str, payload: ResponseRequest):
+    session = active_session_for_student(code, payload.student_id)
     if store.is_locked(session["id"], payload.student_id):
         raise HTTPException(status_code=403, detail="This activity is locked due to focus violations")
     activity = store.get_activity(session["activity_id"])
@@ -146,6 +160,8 @@ async def submit_response(code: str, payload: ResponseRequest):
         stages = activity["manifest"]["stages"]
         stage_index = session["current_stage_index"] if session["current_stage_index"] >= 0 else 0
         stage_id = stages[stage_index]["id"]
+    if store.has_response_for_stage(session["id"], payload.student_id, stage_id):
+        raise HTTPException(status_code=409, detail="You've already submitted an answer for this part of the lesson")
     response = store.add_response(session["id"], payload.student_id, stage_id, payload.correct, payload.answer, payload.mark)
     store.set_needs_help(payload.student_id, False)
     await manager.broadcast(session["code"], {"type": "response_submitted", "response": response}, roles=("teacher",))
@@ -160,11 +176,7 @@ class FocusViolationRequest(BaseModel):
 
 @router.post("/join/{code}/focus-violation")
 async def report_focus_violation(code: str, payload: FocusViolationRequest):
-    session = store.get_session_by_code(code.upper())
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    if not store.get_student_in_session(payload.student_id, session["id"]):
-        raise HTTPException(status_code=404, detail="Student not found in this session")
+    session = active_session_for_student(code, payload.student_id)
     violation = store.add_focus_violation(session["id"], payload.student_id, payload.type)
     locked = violation["violation_number"] >= 3
     await manager.broadcast(
@@ -181,11 +193,7 @@ class NeedHelpRequest(BaseModel):
 
 @router.post("/join/{code}/need-help")
 async def request_help(code: str, payload: NeedHelpRequest):
-    session = store.get_session_by_code(code.upper())
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    if not store.get_student_in_session(payload.student_id, session["id"]):
-        raise HTTPException(status_code=404, detail="Student not found in this session")
+    session = active_session_for_student(code, payload.student_id)
     student = store.set_needs_help(payload.student_id, True)
     await manager.broadcast(session["code"], {"type": "need_help_requested", "student": student}, roles=("teacher",))
     activity = store.get_activity(session["activity_id"])

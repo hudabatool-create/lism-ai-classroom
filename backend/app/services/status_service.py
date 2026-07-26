@@ -11,20 +11,34 @@ from app.services.websocket_manager import manager
 STATUS_PRIORITY = ("locked", "inactive", "needs_help", "completed", "working", "waiting")
 
 
-def compute_student_statuses(session: dict, activity: dict) -> dict[str, dict]:
+def compute_student_statuses(
+    session: dict,
+    activity: dict,
+    students: list[dict] | None = None,
+    responses: list[dict] | None = None,
+) -> dict[str, dict]:
+    """`students`/`responses` are accepted so a caller that already loaded
+    them doesn't pay for the same queries twice -- every query here is a
+    network round-trip, and this function runs after every student action."""
     stages = activity["manifest"]["stages"]
     stage_id = None
     if 0 <= session["current_stage_index"] < len(stages):
         stage_id = stages[session["current_stage_index"]]["id"]
 
     online_ids = manager.online_student_ids(session["code"])
-    responses = store.list_responses(session["id"])
+    if responses is None:
+        responses = store.list_responses(session["id"])
+    if students is None:
+        students = store.list_students(session["id"])
     responded_current_stage = {r["student_id"] for r in responses if r["stage_id"] == stage_id} if stage_id else set()
 
+    # One grouped query for the whole class, not one per student.
+    violation_counts = store.get_violation_counts(session["id"])
+
     statuses: dict[str, dict] = {}
-    for student in store.list_students(session["id"]):
+    for student in students:
         sid = student["id"]
-        violation_count = store.get_violation_count(session["id"], sid)
+        violation_count = violation_counts.get(sid, 0)
 
         if violation_count >= 3:
             status = "locked"
