@@ -53,6 +53,9 @@ export interface Activity {
   created_at: string;
   manifest: LessonManifest;
   asset_files: string[];
+  /** Set only on the generate response: explains when a starter template was
+   *  used instead of AI-written content, and why. */
+  warning?: string | null;
 }
 
 export interface ActivityDetail extends Activity {

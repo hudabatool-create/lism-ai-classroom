@@ -192,6 +192,11 @@ export default function GenerateActivityPage() {
       {created && (
         <div className="mt-6 rounded-2xl border border-green-200 bg-green-50 p-5 dark:border-green-900 dark:bg-green-950">
           <p className="font-semibold text-green-800 dark:text-green-300">&quot;{created.title}&quot; is ready.</p>
+          {created.warning && (
+            <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+              {created.warning}
+            </p>
+          )}
           <div className="mt-3 flex gap-3">
             <a
               href={`/dashboard/activities/${created.id}/preview`}

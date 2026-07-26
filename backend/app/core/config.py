@@ -62,7 +62,15 @@ class Settings(BaseSettings):
     smtp_password: str | None = None
     smtp_from_email: str = "no-reply@lism.local"
 
+    # Without a key, activity generation falls back to starter templates: the
+    # structure and pedagogy are right but the questions are generic, because
+    # a template has no knowledge of the topic.
     openai_api_key: str | None = None
+    openai_model: str = "gpt-4o-mini"
+    # A full lesson deck is a large HTML file; too low and the response is
+    # silently truncated mid-tag into a broken activity.
+    openai_max_tokens: int = 16000
+    openai_timeout_seconds: int = 120
 
     supabase_url: str | None = None
     supabase_anon_key: str | None = None

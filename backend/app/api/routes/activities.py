@@ -76,7 +76,7 @@ class GenerateRequest(BaseModel):
 
 @router.post("/generate")
 def generate_activity(payload: GenerateRequest, teacher: dict = Depends(get_current_teacher)):
-    html = generate_activity_html(
+    html, warning = generate_activity_html(
         payload.subject,
         payload.grade,
         payload.topic,
@@ -97,7 +97,10 @@ def generate_activity(payload: GenerateRequest, teacher: dict = Depends(get_curr
         source="ai",
         manifest=manifest,
     )
-    return _public_activity(activity)
+    # Tell the teacher when what they got is a template rather than
+    # AI-written content, and why -- silently substituting one for the other
+    # is how "the AI is bad" turns out to mean "the key was rejected".
+    return {**_public_activity(activity), "warning": warning}
 
 
 def _get_owned_activity(activity_id: str, teacher: dict) -> dict:

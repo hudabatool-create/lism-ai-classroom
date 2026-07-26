@@ -18,9 +18,12 @@ Coach and Insights work identically regardless of activity type.
 """
 
 import json
+import logging
 from pathlib import Path
 
 from app.core.config import settings
+
+logger = logging.getLogger("lism.ai")
 
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 
@@ -868,17 +871,33 @@ def generate_activity_html(
     difficulty: str,
     time_limit: int,
     custom_prompt: str | None = None,
-) -> str:
+) -> tuple[str, str | None]:
+    """Returns (html, warning).
+
+    `warning` is None on success. When a key is configured but the call
+    failed, it explains why in teacher-readable terms -- previously every
+    failure fell back to the canned template silently, so a wrong, expired or
+    out-of-credit key was indistinguishable from having no key at all, and
+    the teacher just saw generic content with no idea why.
+    """
     if settings.openai_api_key:
-        html = _generate_with_openai(
+        html, error = _generate_with_openai(
             subject, grade, topic, activity_type, objectives, difficulty, time_limit, custom_prompt
         )
         if html:
-            return html
+            return html, None
+        return (
+            _canned_template(subject, grade, topic, activity_type, difficulty, time_limit),
+            f"AI generation failed, so a template was used instead. {error}",
+        )
     # Custom prompts require a real LLM call to have any effect; without a
     # configured key there's nothing to run them through, so fall back to
     # the same canned template used for that activity type.
-    return _canned_template(subject, grade, topic, activity_type, difficulty, time_limit)
+    return (
+        _canned_template(subject, grade, topic, activity_type, difficulty, time_limit),
+        "No OpenAI key is configured, so this is a starter template rather than AI-written content. "
+        "Edit the questions to match your lesson, or set OPENAI_API_KEY to generate them automatically.",
+    )
 
 
 def _build_master_prompt(prompt_file: str, subject, grade, topic, week, previous_topic) -> str:
@@ -898,11 +917,14 @@ def _build_master_prompt(prompt_file: str, subject, grade, topic, week, previous
 
 def _generate_with_openai(
     subject, grade, topic, activity_type, objectives, difficulty, time_limit, custom_prompt=None
-) -> str | None:
+) -> tuple[str | None, str | None]:
+    """Returns (html, error_reason). Exactly one is ever non-None."""
     try:
         from openai import OpenAI
 
-        client = OpenAI(api_key=settings.openai_api_key)
+        # Without a timeout a hung call blocks the request until the proxy
+        # gives up, and the teacher sees a spinner with no explanation.
+        client = OpenAI(api_key=settings.openai_api_key, timeout=settings.openai_timeout_seconds)
 
         prompt_file = _LESSON_TYPE_TO_PROMPT_FILE.get(activity_type)
         if custom_prompt and custom_prompt.strip():
@@ -941,16 +963,49 @@ def _generate_with_openai(
             )
 
         resp = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=settings.openai_model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
+            # A full lesson deck is a large file; too low a ceiling silently
+            # truncates the HTML mid-tag and the activity renders broken.
+            max_tokens=settings.openai_max_tokens,
         )
         html = (resp.choices[0].message.content or "").strip()
         if html.startswith("```"):
             html = html.strip("`")
             if html[:4].lower() == "html":
                 html = html[4:]
-        return html or None
-    except Exception:
-        # Any failure (missing/invalid key, network, rate limit) falls back to the canned template.
-        return None
+        html = html.strip()
+
+        if not html:
+            return None, "The model returned an empty response. Try generating again."
+        # A truncated response is worse than none: it looks like a real
+        # activity but the markup is cut off mid-tag.
+        if resp.choices[0].finish_reason == "length":
+            return None, (
+                f"The response hit the {settings.openai_max_tokens}-token limit and was cut off. "
+                "Raise OPENAI_MAX_TOKENS or generate a shorter activity."
+            )
+        if "<" not in html:
+            return None, "The model did not return HTML. Try generating again."
+        return html, None
+
+    except Exception as exc:  # noqa: BLE001 -- reason is reported, not swallowed
+        name = type(exc).__name__
+        detail = str(exc)
+        # Map the failures a teacher can actually act on; anything else is
+        # reported verbatim rather than hidden.
+        if "AuthenticationError" in name or "invalid_api_key" in detail or "Incorrect API key" in detail:
+            reason = "The OpenAI API key was rejected. Check OPENAI_API_KEY is correct and still active."
+        elif "RateLimitError" in name or "insufficient_quota" in detail:
+            reason = "OpenAI rejected the request for quota or rate limits. Check the billing/credit on that key."
+        elif "NotFoundError" in name or "model_not_found" in detail:
+            reason = f"The model '{settings.openai_model}' isn't available on that key. Set OPENAI_MODEL to one that is."
+        elif "APITimeoutError" in name or "Timeout" in name:
+            reason = f"OpenAI did not respond within {settings.openai_timeout_seconds}s. Try again."
+        elif "APIConnectionError" in name:
+            reason = "Could not reach OpenAI from the server. Check outbound network access."
+        else:
+            reason = f"{name}: {detail[:200]}"
+        logger.warning("OpenAI generation failed -- falling back to template. %s", reason)
+        return None, reason
