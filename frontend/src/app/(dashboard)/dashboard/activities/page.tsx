@@ -137,9 +137,7 @@ export default function ActivitiesPage() {
               </div>
               <div className="mt-4 flex gap-2">
                 <a
-                  href={`${api.base}/api/activities/${activity.id}/raw`}
-                  target="_blank"
-                  rel="noreferrer"
+                  href={`/dashboard/activities/${activity.id}/preview`}
                   className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-center text-sm font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
                 >
                   Preview

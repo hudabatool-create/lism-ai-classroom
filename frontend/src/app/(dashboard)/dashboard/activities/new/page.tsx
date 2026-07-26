@@ -194,9 +194,7 @@ export default function GenerateActivityPage() {
           <p className="font-semibold text-green-800 dark:text-green-300">&quot;{created.title}&quot; is ready.</p>
           <div className="mt-3 flex gap-3">
             <a
-              href={`${api.base}/api/activities/${created.id}/raw`}
-              target="_blank"
-              rel="noreferrer"
+              href={`/dashboard/activities/${created.id}/preview`}
               className="rounded-lg border border-green-300 px-3 py-2 text-sm font-medium text-green-800 hover:bg-green-100 dark:border-green-800 dark:text-green-300"
             >
               Preview
