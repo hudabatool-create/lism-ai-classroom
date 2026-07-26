@@ -60,9 +60,19 @@ class SessionModel(Base):
     created_at: Mapped[str] = mapped_column(String, nullable=False)
     ended_at: Mapped[str | None] = mapped_column(String, nullable=True)
     current_stage_index: Mapped[int] = mapped_column(Integer, nullable=False, default=-1)
+    # "idle" | "running" | "paused" | "ended"
     stage_status: Mapped[str] = mapped_column(String, nullable=False, default="idle")
     stage_started_at: Mapped[str | None] = mapped_column(String, nullable=True)
+    # While running this is the time left from stage_started_at. Pausing
+    # rewrites it to the remaining seconds and resuming restarts the clock
+    # from now, so the countdown maths is identical in both states.
     stage_duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # Teacher-controlled per-session settings, delivered to the activity as a
+    # lism:command set_config (see docs/LISM_ACTIVITY_CONTRACT.md).
+    copy_paste_protection: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    focus_monitoring: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    max_warnings: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
 
 
 class Student(Base):

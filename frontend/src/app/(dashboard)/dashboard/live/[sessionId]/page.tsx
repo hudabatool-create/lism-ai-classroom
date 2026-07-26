@@ -34,6 +34,40 @@ function CopyButton({ value, label }: { value: string; label: string }) {
   );
 }
 
+function formatSeconds(total: number | null) {
+  if (total == null) return "0:00";
+  const m = Math.floor(Math.max(0, total) / 60);
+  const s = Math.max(0, total) % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+function SettingToggle({
+  label,
+  hint,
+  checked,
+  onChange,
+}: {
+  label: string;
+  hint: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <label className="flex cursor-pointer items-start gap-3">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="mt-0.5 h-4 w-4 shrink-0 accent-brand-600"
+      />
+      <span>
+        <span className="block text-sm font-medium text-slate-800 dark:text-slate-200">{label}</span>
+        <span className="block text-xs text-slate-500 dark:text-slate-400">{hint}</span>
+      </span>
+    </label>
+  );
+}
+
 function useCountdown(startedAt: string | null, durationSeconds: number | null, running: boolean) {
   const [remaining, setRemaining] = useState<number | null>(null);
 
@@ -151,6 +185,38 @@ export default function LiveSessionPage() {
         if (msg.type === "stage_ended") {
           return { ...prev, session: { ...prev.session, stage_status: "ended" } };
         }
+        if (msg.type === "stage_paused") {
+          return {
+            ...prev,
+            session: {
+              ...prev.session,
+              stage_status: "paused",
+              stage_duration_seconds: msg.remainingSeconds,
+            },
+          };
+        }
+        if (msg.type === "stage_resumed") {
+          return {
+            ...prev,
+            session: {
+              ...prev.session,
+              stage_status: "running",
+              stage_started_at: msg.startedAt,
+              stage_duration_seconds: msg.durationSeconds,
+            },
+          };
+        }
+        if (msg.type === "settings_updated") {
+          return {
+            ...prev,
+            session: {
+              ...prev.session,
+              copy_paste_protection: msg.copyPasteProtection,
+              focus_monitoring: msg.focusMonitoring,
+              max_warnings: msg.maxWarnings,
+            },
+          };
+        }
         if (msg.type === "timer_extended") {
           return { ...prev, session: { ...prev.session, stage_duration_seconds: msg.durationSeconds } };
         }
@@ -209,6 +275,32 @@ export default function LiveSessionPage() {
   async function handleExtend() {
     if (!detail) return;
     await api.post(`/api/sessions/${detail.session.id}/stage/extend`, { additional_seconds: 60 });
+  }
+
+  async function handlePause() {
+    if (!detail) return;
+    setStageActionPending(true);
+    try {
+      await api.post(`/api/sessions/${detail.session.id}/stage/pause`);
+    } finally {
+      setStageActionPending(false);
+    }
+  }
+
+  async function handleResume() {
+    if (!detail) return;
+    setStageActionPending(true);
+    try {
+      await api.post(`/api/sessions/${detail.session.id}/stage/resume`);
+    } finally {
+      setStageActionPending(false);
+    }
+  }
+
+  async function handleSetting(patch: Record<string, boolean | number>) {
+    if (!detail) return;
+    // The WebSocket broadcast updates local state, so don't set it here too.
+    await api.patch(`/api/sessions/${detail.session.id}/settings`, patch);
   }
 
   if (loadError) {
@@ -285,6 +377,13 @@ export default function LiveSessionPage() {
                   {remaining}
                 </span>
               )}
+              {/* Paused: the countdown isn't ticking, so show the banked
+                  remaining time rather than nothing at all. */}
+              {session.stage_status === "paused" && (
+                <span className="rounded-lg bg-amber-50 px-3 py-1.5 font-mono text-sm font-semibold text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                  {formatSeconds(session.stage_duration_seconds)} paused
+                </span>
+              )}
               {session.stage_status === "running" && (
                 <>
                   <button
@@ -292,6 +391,13 @@ export default function LiveSessionPage() {
                     className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
                   >
                     +1 min
+                  </button>
+                  <button
+                    onClick={handlePause}
+                    disabled={stageActionPending}
+                    className="rounded-lg border border-amber-300 px-3 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-50 dark:border-amber-800 dark:text-amber-300 dark:hover:bg-amber-950"
+                  >
+                    Pause
                   </button>
                   <button
                     onClick={handleEndStage}
@@ -302,7 +408,27 @@ export default function LiveSessionPage() {
                   </button>
                 </>
               )}
-              {session.stage_status !== "running" && !(session.stage_status === "ended" && isLastStage) && (
+              {session.stage_status === "paused" && (
+                <>
+                  <button
+                    onClick={handleResume}
+                    disabled={stageActionPending}
+                    className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+                  >
+                    Resume
+                  </button>
+                  <button
+                    onClick={handleEndStage}
+                    disabled={stageActionPending}
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-100 disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-800"
+                  >
+                    End Stage
+                  </button>
+                </>
+              )}
+              {session.stage_status !== "running" &&
+                session.stage_status !== "paused" &&
+                !(session.stage_status === "ended" && isLastStage) && (
                 <button
                   onClick={handleStartStage}
                   disabled={stageActionPending}
@@ -313,6 +439,12 @@ export default function LiveSessionPage() {
               )}
             </div>
           </div>
+
+          {session.stage_status === "paused" && (
+            <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+              Paused. Students can&apos;t type until you resume, and nothing they have already written is lost.
+            </p>
+          )}
 
           <ol className="mt-4 flex flex-wrap gap-2">
             {stages.map((stage, index) => {
@@ -337,6 +469,29 @@ export default function LiveSessionPage() {
           {session.stage_status === "ended" && isLastStage && session.current_stage_index >= 0 && (
             <p className="mt-3 text-sm font-medium text-green-600">Lesson complete &mdash; all stages finished.</p>
           )}
+        </div>
+      )}
+
+      {session.status === "active" && (
+        <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+          <p className="text-sm font-semibold text-slate-900 dark:text-white">Lesson settings</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Change these at any time &mdash; they apply to every student immediately, without anyone reloading.
+          </p>
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <SettingToggle
+              label="Copy &amp; paste protection"
+              hint="Students must type their own answers. Copy, paste and right-click are switched off inside answer boxes."
+              checked={session.copy_paste_protection}
+              onChange={(value) => handleSetting({ copy_paste_protection: value })}
+            />
+            <SettingToggle
+              label="Focus monitoring"
+              hint={`Records tab and window switching. Locks the activity after ${session.max_warnings} warnings and notifies you here.`}
+              checked={session.focus_monitoring}
+              onChange={(value) => handleSetting({ focus_monitoring: value })}
+            />
+          </div>
         </div>
       )}
 

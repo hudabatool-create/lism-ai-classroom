@@ -5,16 +5,19 @@ from app.api.routes import activities, auth, coach, insights, prompts, reports, 
 from app.core.config import settings
 from app.db import models  # noqa: F401 -- registers tables on Base.metadata
 from app.db.base import Base, engine
+from app.db.migrate import add_missing_columns
 
 app = FastAPI(title=settings.app_name)
 
 
 @app.on_event("startup")
 def _create_tables():
-    # No migration framework yet (Alembic) -- fine for a scaffold whose
-    # schema isn't expected to change out from under real data yet. Add one
-    # before this app has production data worth migrating carefully.
+    # create_all adds missing tables; add_missing_columns adds columns that
+    # exist on the models but not yet in an already-deployed database, which
+    # create_all will not do. Both are additive and safe to re-run. See
+    # app/db/migrate.py for why this is a stopgap rather than Alembic.
     Base.metadata.create_all(bind=engine)
+    add_missing_columns()
 
 app.add_middleware(
     CORSMiddleware,

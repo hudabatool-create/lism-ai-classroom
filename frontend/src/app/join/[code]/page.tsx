@@ -7,7 +7,15 @@ import { api } from "@/lib/api";
 import type { LessonManifest, SessionType, Stage } from "@/lib/types";
 
 interface JoinInfo {
-  session: { code: string; status: string; session_type: SessionType };
+  session: {
+    code: string;
+    status: string;
+    session_type: SessionType;
+    stage_status: "idle" | "running" | "paused" | "ended";
+    copy_paste_protection: boolean;
+    focus_monitoring: boolean;
+    max_warnings: number;
+  };
   activity: { id: string; title: string; manifest: LessonManifest };
   current_stage: Stage | null;
 }
@@ -25,6 +33,7 @@ export default function JoinPage() {
   const [flash, setFlash] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [locked, setLocked] = useState<string | null>(null);
+  const [paused, setPaused] = useState(false);
   const [helpSent, setHelpSent] = useState(false);
   const [coachOpen, setCoachOpen] = useState(false);
   const [coachMessages, setCoachMessages] = useState<{ role: "student" | "coach"; content: string }[]>([]);
@@ -62,10 +71,22 @@ export default function JoinPage() {
     iframeRef.current?.contentWindow?.postMessage({ type: "lism:command", command, ...extra }, "*");
   }
 
+  function sendConfig(session: JoinInfo["session"]) {
+    sendCommand("set_config", {
+      copyPasteProtection: session.copy_paste_protection,
+      focusMonitoring: session.focus_monitoring,
+      maxWarnings: session.max_warnings,
+    });
+  }
+
   function handleIframeLoad() {
+    // Config first: the activity should know the rules before the student can
+    // interact with the stage it is about to be shown.
+    if (info) sendConfig(info.session);
     if (currentStageRef.current) {
       sendCommand("start_stage", { stage: currentStageRef.current });
     }
+    if (info?.session.stage_status === "paused") sendCommand("pause");
   }
 
   // The activity's response contract: prefer the new 'lism:event' shape
@@ -73,7 +94,9 @@ export default function JoinPage() {
   // shape so activities generated before the Classroom Engine keep working.
   const handleActivityMessage = useCallback(
     (event: MessageEvent) => {
-      if (!studentId || locked) return;
+      // Paused means paused: an activity that ignores the pause command must
+      // still not be able to bank answers while the class is frozen.
+      if (!studentId || locked || paused) return;
       const data = event.data ?? {};
       let stageId: string | undefined;
       let correct: boolean | null = null;
@@ -110,7 +133,7 @@ export default function JoinPage() {
           setTimeout(() => setFlash(null), 4000);
         });
     },
-    [studentId, code, info, locked]
+    [studentId, code, info, locked, paused]
   );
 
   useEffect(() => {
@@ -129,9 +152,39 @@ export default function JoinPage() {
       const msg = JSON.parse(event.data);
       if (msg.type === "stage_started") {
         currentStageRef.current = msg.stage;
+        setPaused(false);
         sendCommand("start_stage", { stage: msg.stage });
       } else if (msg.type === "stage_ended") {
+        setPaused(false);
         sendCommand("stage_ended");
+      } else if (msg.type === "stage_paused") {
+        // The overlay is what actually stops the student typing; the command
+        // lets the activity freeze itself too, so a keyboard-focused input
+        // inside the iframe can't keep accepting input behind the overlay.
+        setPaused(true);
+        sendCommand("pause");
+      } else if (msg.type === "stage_resumed") {
+        setPaused(false);
+        sendCommand("resume");
+      } else if (msg.type === "settings_updated") {
+        setInfo((prev) =>
+          prev
+            ? {
+                ...prev,
+                session: {
+                  ...prev.session,
+                  copy_paste_protection: msg.copyPasteProtection,
+                  focus_monitoring: msg.focusMonitoring,
+                  max_warnings: msg.maxWarnings,
+                },
+              }
+            : prev
+        );
+        sendCommand("set_config", {
+          copyPasteProtection: msg.copyPasteProtection,
+          focusMonitoring: msg.focusMonitoring,
+          maxWarnings: msg.maxWarnings,
+        });
       }
     };
 
@@ -139,14 +192,15 @@ export default function JoinPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [studentId, code]);
 
-  // Focus Mode: only enforced in Assessment sessions. Detects tab switches,
-  // window switching/minimizing and leaving the LISM window. blur and
-  // visibilitychange both fire for the same physical "left the tab" event in
-  // most browsers, so awayRef collapses them into a single violation per
-  // departure instead of double-counting.
-  const assessmentMode = info?.session.session_type === "assessment";
+  // Focus Mode: driven by the teacher's focus_monitoring setting, which
+  // defaults on for an assessment but is now switchable mid-lesson either
+  // way. Detects tab switches, window switching/minimizing and leaving the
+  // LISM window. blur and visibilitychange both fire for the same physical
+  // "left the tab" event in most browsers, so awayRef collapses them into a
+  // single violation per departure instead of double-counting.
+  const focusMonitoring = info?.session.focus_monitoring ?? false;
   useEffect(() => {
-    if (!studentId || !assessmentMode || locked) return;
+    if (!studentId || !focusMonitoring || locked) return;
 
     async function reportViolation() {
       try {
@@ -189,7 +243,7 @@ export default function JoinPage() {
       window.removeEventListener("focus", handleBack);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [studentId, assessmentMode, locked, code]);
+  }, [studentId, focusMonitoring, locked, code]);
 
   useEffect(() => {
     if (!warning) return;
@@ -360,6 +414,19 @@ export default function JoinPage() {
               Send
             </button>
           </form>
+        </div>
+      )}
+
+      {/* Paused sits below the lock overlay's z-index on purpose: a locked
+          student stays locked even if the teacher pauses the class. */}
+      {paused && !locked && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/90 px-6 text-center">
+          <div className="max-w-md">
+            <p className="text-lg font-semibold text-white">Paused by your teacher</p>
+            <p className="mt-3 text-sm text-slate-300">
+              Your work is saved. You&apos;ll be able to carry on as soon as your teacher resumes the lesson.
+            </p>
+          </div>
         </div>
       )}
 

@@ -83,6 +83,42 @@ def session_qrcode(session_id: str):
     return StreamingResponse(buf, media_type="image/png")
 
 
+class SessionSettingsRequest(BaseModel):
+    copy_paste_protection: bool | None = None
+    focus_monitoring: bool | None = None
+    max_warnings: int | None = None
+
+
+@router.patch("/sessions/{session_id}/settings")
+async def update_session_settings(
+    session_id: str, payload: SessionSettingsRequest, teacher: dict = Depends(get_current_teacher)
+):
+    """Teacher toggles copy-paste protection / focus monitoring mid-lesson.
+    Broadcast to everyone so student pages re-send set_config into their
+    activity iframe without needing a reload."""
+    session = store.get_session(session_id)
+    if not session or session["teacher_id"] != teacher["id"]:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if payload.max_warnings is not None and not 1 <= payload.max_warnings <= 10:
+        raise HTTPException(status_code=400, detail="Maximum warnings must be between 1 and 10")
+    updated = store.update_session_settings(
+        session_id,
+        copy_paste_protection=payload.copy_paste_protection,
+        focus_monitoring=payload.focus_monitoring,
+        max_warnings=payload.max_warnings,
+    )
+    await manager.broadcast(
+        updated["code"],
+        {
+            "type": "settings_updated",
+            "copyPasteProtection": updated["copy_paste_protection"],
+            "focusMonitoring": updated["focus_monitoring"],
+            "maxWarnings": updated["max_warnings"],
+        },
+    )
+    return updated
+
+
 @router.post("/sessions/{session_id}/end")
 def end_session(session_id: str, teacher: dict = Depends(get_current_teacher)):
     session = store.get_session(session_id)

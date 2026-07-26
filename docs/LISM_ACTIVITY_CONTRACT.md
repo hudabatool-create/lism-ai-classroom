@@ -240,9 +240,9 @@ In preview mode the activity must:
 | `start_stage`, `stage_ended` | Implemented (`join/[code]/page.tsx`) |
 | `student_submitted` → response record | Implemented |
 | Legacy `lism-activity-response` | Implemented (back-compat) |
-| Focus monitoring + 3-strike lock + teacher alert | Implemented, but LISM-side and tied to `sessionType: assessment` |
-| `pause` / `resume` | **Not yet** — needs a backend stage-pause endpoint + dashboard buttons |
-| `set_config` (copy-paste, focus toggles) | **Not yet** — needs per-session teacher settings |
+| Focus monitoring + 3-strike lock + teacher alert | Implemented, LISM-side, now driven by the teacher's `focus_monitoring` setting (defaults on for an assessment) |
+| `pause` / `resume` | Implemented — `POST /api/sessions/{id}/stage/pause` and `/resume`, Pause/Resume on the dashboard, relayed to the activity. Remaining time is banked on pause and resumed from, so the countdown never loses or gains time |
+| `set_config` (copy-paste, focus toggles) | Implemented — `PATCH /api/sessions/{id}/settings`, toggles on the dashboard, broadcast live and relayed as `set_config` with no reload |
 | `time_update` | **Not yet** |
 | `response_update`, `stage_completed`, `activity_completed`, `help_requested`, `focus_warning` | **Not yet consumed** — safely ignored today |
 | `?preview=1` with Prev/Next | Activity-side only; no platform work needed |

@@ -100,6 +100,9 @@ def _session_dict(row: SessionModel) -> dict:
         "stage_status": row.stage_status,
         "stage_started_at": row.stage_started_at,
         "stage_duration_seconds": row.stage_duration_seconds,
+        "copy_paste_protection": row.copy_paste_protection,
+        "focus_monitoring": row.focus_monitoring,
+        "max_warnings": row.max_warnings,
     }
 
 
@@ -392,11 +395,35 @@ class DataStore:
                 # means the lesson hasn't been started yet (teacher hasn't
                 # clicked "Start Stage 1" / "Start Next Stage").
                 current_stage_index=-1,
-                stage_status="idle",  # "idle" | "running" | "ended"
+                stage_status="idle",  # "idle" | "running" | "paused" | "ended"
                 stage_started_at=None,
                 stage_duration_seconds=None,
+                # Focus monitoring defaults on for an assessment and off
+                # otherwise -- the previous hard-wired behaviour -- but the
+                # teacher can now change it either way, mid-lesson.
+                copy_paste_protection=(session_type == "assessment"),
+                focus_monitoring=(session_type == "assessment"),
+                max_warnings=3,
             )
             db.add(row)
+            db.commit()
+            return _session_dict(row)
+
+    def update_session_settings(
+        self,
+        session_id: str,
+        copy_paste_protection: bool | None = None,
+        focus_monitoring: bool | None = None,
+        max_warnings: int | None = None,
+    ) -> dict:
+        with self._lock, SessionLocal() as db:
+            row = db.get(SessionModel, session_id)
+            if copy_paste_protection is not None:
+                row.copy_paste_protection = copy_paste_protection
+            if focus_monitoring is not None:
+                row.focus_monitoring = focus_monitoring
+            if max_warnings is not None:
+                row.max_warnings = max_warnings
             db.commit()
             return _session_dict(row)
 
@@ -434,6 +461,32 @@ class DataStore:
             row.stage_status = "running"
             row.stage_started_at = _now()
             row.stage_duration_seconds = duration_seconds
+            db.commit()
+            return _session_dict(row)
+
+    def pause_stage(self, session_id: str) -> dict:
+        """Freeze the countdown by banking the time left.
+
+        stage_duration_seconds is rewritten to whatever remains, so resuming
+        only has to restart the clock from now -- the "ends at started_at +
+        duration" maths every client already uses stays correct in both
+        states, with no separate paused-at bookkeeping to drift.
+        """
+        with self._lock, SessionLocal() as db:
+            row = db.get(SessionModel, session_id)
+            if row.stage_started_at and row.stage_duration_seconds is not None:
+                started = datetime.fromisoformat(row.stage_started_at)
+                elapsed = (datetime.now(timezone.utc) - started).total_seconds()
+                row.stage_duration_seconds = max(0, int(row.stage_duration_seconds - elapsed))
+            row.stage_status = "paused"
+            db.commit()
+            return _session_dict(row)
+
+    def resume_stage(self, session_id: str) -> dict:
+        with self._lock, SessionLocal() as db:
+            row = db.get(SessionModel, session_id)
+            row.stage_started_at = _now()
+            row.stage_status = "running"
             db.commit()
             return _session_dict(row)
 

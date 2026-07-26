@@ -60,6 +60,47 @@ async def end_stage(session_id: str, teacher: dict = Depends(get_current_teacher
     return updated
 
 
+@router.post("/{session_id}/stage/pause")
+async def pause_stage(session_id: str, teacher: dict = Depends(get_current_teacher)):
+    session = _get_owned_session(session_id, teacher)
+    if session["stage_status"] != "running":
+        raise HTTPException(status_code=400, detail="No stage is running")
+    updated = store.pause_stage(session_id)
+    # Students need this too: their page relays it into the activity as a
+    # lism:command pause, which freezes inputs without losing typed work.
+    await manager.broadcast(
+        session["code"],
+        {
+            "type": "stage_paused",
+            "stageIndex": updated["current_stage_index"],
+            "remainingSeconds": updated["stage_duration_seconds"],
+        },
+    )
+    activity = store.get_activity(updated["activity_id"])
+    await broadcast_status_update(updated, activity)
+    return updated
+
+
+@router.post("/{session_id}/stage/resume")
+async def resume_stage(session_id: str, teacher: dict = Depends(get_current_teacher)):
+    session = _get_owned_session(session_id, teacher)
+    if session["stage_status"] != "paused":
+        raise HTTPException(status_code=400, detail="This stage is not paused")
+    updated = store.resume_stage(session_id)
+    await manager.broadcast(
+        session["code"],
+        {
+            "type": "stage_resumed",
+            "stageIndex": updated["current_stage_index"],
+            "durationSeconds": updated["stage_duration_seconds"],
+            "startedAt": updated["stage_started_at"],
+        },
+    )
+    activity = store.get_activity(updated["activity_id"])
+    await broadcast_status_update(updated, activity)
+    return updated
+
+
 @router.post("/{session_id}/stage/extend")
 async def extend_stage(session_id: str, payload: ExtendRequest, teacher: dict = Depends(get_current_teacher)):
     session = _get_owned_session(session_id, teacher)

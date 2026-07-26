@@ -72,9 +72,14 @@ export interface SessionInfo {
   ended_at: string | null;
   join_url?: string;
   current_stage_index: number;
-  stage_status: "idle" | "running" | "ended";
+  stage_status: "idle" | "running" | "paused" | "ended";
   stage_started_at: string | null;
+  // While running, the time left from stage_started_at. Pausing rewrites this
+  // to the remaining seconds, so the same countdown maths works either way.
   stage_duration_seconds: number | null;
+  copy_paste_protection: boolean;
+  focus_monitoring: boolean;
+  max_warnings: number;
 }
 
 export interface Student {
