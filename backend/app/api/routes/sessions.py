@@ -245,6 +245,22 @@ async def submit_response(code: str, payload: ResponseRequest):
         stages = activity["manifest"]["stages"]
         stage_index = session["current_stage_index"] if session["current_stage_index"] >= 0 else 0
         stage_id = stages[stage_index]["id"]
+    # Teacher-controlled pacing has to be enforced here, not in the activity.
+    # A worksheet is one long scrolling page: every section is on screen at
+    # once, so a student can always reach the Exit Ticket and type in it, and
+    # an uploaded activity that ignores our stage commands can't be made to
+    # hide anything. The server is the only place the rule can actually hold.
+    stages = activity["manifest"]["stages"]
+    stage_index = next((i for i, s in enumerate(stages) if s["id"] == stage_id), None)
+    if stage_index is None:
+        raise HTTPException(status_code=400, detail="That section is not part of this activity")
+    if stage_index > session["current_stage_index"]:
+        label = stages[stage_index]["label"]
+        raise HTTPException(
+            status_code=403,
+            detail=f"Your teacher hasn't started \"{label}\" yet. Your answer was not saved — wait for this section to begin.",
+        )
+
     if store.has_response_for_stage(session["id"], payload.student_id, stage_id):
         raise HTTPException(status_code=409, detail="You've already submitted an answer for this part of the lesson")
     response = store.add_response(session["id"], payload.student_id, stage_id, payload.correct, payload.answer, payload.mark)

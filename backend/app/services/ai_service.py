@@ -413,49 +413,70 @@ def _gen_exit_ticket(subject, grade, topic, difficulty, time_limit) -> tuple[dic
 
 
 def _gen_flashcards(subject, grade, topic, difficulty, time_limit) -> tuple[dict, str]:
-    stages = [_stage("flashcards", "Flashcards", "flashcards", 300)]
-    manifest = _base_manifest("standalone", subject, grade, topic, stages)
+    # One stage per card: a single "Flashcards" stage gave the teacher nothing
+    # to pace and left Preview's Previous/Next with nowhere to go.
     cards = [
-        (f"Term {i} about {topic}", f"Definition {i} relating to {topic} in {subject}.") for i in range(1, 5)
+        (
+            f"Key term 1 — {topic}",
+            f"Write the definition of the first key term in {topic} here. (Teacher: replace this text.)",
+        ),
+        (
+            f"Key term 2 — {topic}",
+            f"Write the definition of the second key term in {topic} here. (Teacher: replace this text.)",
+        ),
+        (
+            f"Key term 3 — {topic}",
+            f"Write the definition of the third key term in {topic} here. (Teacher: replace this text.)",
+        ),
+        (
+            f"Key term 4 — {topic}",
+            f"Write the definition of the fourth key term in {topic} here. (Teacher: replace this text.)",
+        ),
     ]
-    cards_json = json.dumps(cards)
-    section = f"""  <section class="stage" data-stage="flashcards">
+    stages = [_stage(f"card-{i + 1}", f"Card {i + 1}", "flashcard", 60) for i in range(len(cards))]
+    manifest = _base_manifest("flashcards", subject, grade, topic, stages)
+    sections = "\n\n".join(
+        f"""  <section class="stage" data-stage="card-{i + 1}">
     <div class="card">
       <h1>Flashcards: {topic}</h1>
-      <div class="progress" id="fc-progress">Card 1 of {len(cards)}</div>
-      <div class="flip-card" id="fc-face" onclick="lismFlipCard()"></div>
-      <div id="fc-rating" style="display:none; margin-top:1rem;">
-        <button onclick="lismRateCard(true)">Got it</button>
-        <button onclick="lismRateCard(false)">Still learning</button>
+      <div class="progress">Card {i + 1} of {len(cards)}</div>
+      <div class="flip-card" id="fc-face-{i + 1}" onclick="fcFlip({i + 1})">{front}</div>
+      <p class="teacher-note">Teacher: replace this card's term and definition in Edit Activity.</p>
+      <div id="fc-rating-{i + 1}" style="display:none; margin-top:1rem;">
+        <button onclick="fcRate({i + 1}, true)">Got it</button>
+        <button onclick="fcRate({i + 1}, false)">Still learning</button>
       </div>
     </div>
   </section>"""
+        for i, (front, _back) in enumerate(cards)
+    )
+    # Each card's own text, keyed by card number. The previous version tracked
+    # one shared cursor (fcIndex) for the whole deck, so once the teacher paced
+    # stages the flipped card could show a different card's definition.
+    backs_json = json.dumps({str(i + 1): back for i, (_front, back) in enumerate(cards)})
+    fronts_json = json.dumps({str(i + 1): front for i, (front, _back) in enumerate(cards)})
     extra_js = f"""
-      var fcCards = {cards_json};
-      var fcIndex = 0, fcShowingBack = false, fcGotIt = 0;
-      function fcRender() {{
-        var el = document.getElementById('fc-face');
+      var fcBacks = {backs_json};
+      var fcFronts = {fronts_json};
+      var fcFlipped = {{}};
+      function fcFlip(n) {{
+        var el = document.getElementById('fc-face-' + n);
         if (!el) return;
-        el.textContent = fcShowingBack ? fcCards[fcIndex][1] : fcCards[fcIndex][0];
-        document.getElementById('fc-progress').textContent = 'Card ' + (fcIndex + 1) + ' of ' + fcCards.length;
-        document.getElementById('fc-rating').style.display = fcShowingBack ? 'block' : 'none';
+        fcFlipped[n] = !fcFlipped[n];
+        // Always read this card's own text, never a shared cursor.
+        el.textContent = fcFlipped[n] ? fcBacks[n] : fcFronts[n];
+        document.getElementById('fc-rating-' + n).style.display = fcFlipped[n] ? 'block' : 'none';
       }}
-      window.lismFlipCard = function () {{ fcShowingBack = true; fcRender(); }};
-      window.lismRateCard = function (gotIt) {{
-        if (gotIt) fcGotIt++;
-        fcIndex++;
-        fcShowingBack = false;
-        if (fcIndex >= fcCards.length) {{
-          window.lismEmit('student_submitted', {{ stageId: 'flashcards', correct: null, answer: fcGotIt + '/' + fcCards.length + ' known' }});
-          document.getElementById('fc-face').textContent = 'All done! ' + fcGotIt + '/' + fcCards.length + ' known.';
-          document.getElementById('fc-rating').style.display = 'none';
-          return;
-        }}
-        fcRender();
-      }};
-      if (document.getElementById('fc-face')) fcRender();
+      function fcRate(n, gotIt) {{
+        window.lismEmit('student_submitted', {{
+          stageId: 'card-' + n, correct: gotIt,
+          answer: (gotIt ? 'Got it: ' : 'Still learning: ') + fcFronts[n]
+        }});
+        document.getElementById('fc-rating-' + n).style.display = 'none';
+      }}
+      window.fcFlip = fcFlip; window.fcRate = fcRate;
 """
-    return manifest, _render_shell(topic, subject, manifest, section, "flashcards", extra_js)
+    return manifest, _render_shell(topic, subject, manifest, sections, "card-1", extra_js)
 
 
 def _gen_matching(subject, grade, topic, difficulty, time_limit) -> tuple[dict, str]:

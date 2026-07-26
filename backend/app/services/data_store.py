@@ -372,6 +372,11 @@ class DataStore:
         with SessionLocal() as db:
             return db.scalar(select(SessionModel.id).where(SessionModel.activity_id == activity_id)) is not None
 
+    def count_sessions_for_activity(self, activity_id: str) -> int:
+        """Used to warn the teacher exactly how much history a delete discards."""
+        with SessionLocal() as db:
+            return db.scalar(select(func.count(SessionModel.id)).where(SessionModel.activity_id == activity_id))
+
     def delete_activity(self, activity_id: str) -> None:
         with self._lock, SessionLocal() as db:
             row = db.get(Activity, activity_id)

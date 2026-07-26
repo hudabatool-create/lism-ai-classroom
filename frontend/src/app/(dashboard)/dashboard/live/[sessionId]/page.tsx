@@ -609,19 +609,40 @@ export default function LiveSessionPage() {
                 return (
                   <li
                     key={r.id}
-                    className="flex items-center justify-between rounded-lg border border-slate-200 px-4 py-2 text-sm dark:border-slate-800"
+                    className="rounded-lg border border-slate-200 px-4 py-2 text-sm dark:border-slate-800"
                   >
-                    <span>
-                      {student?.name ?? "Unknown student"}
-                      {stage && <span className="ml-2 text-xs text-slate-400">&middot; {stage.label}</span>}
-                    </span>
-                    <span
-                      className={
-                        r.correct ? "text-green-600" : r.correct === false ? "text-red-500" : "text-slate-400"
-                      }
-                    >
-                      {r.answer || (r.correct ? "Correct" : "Incorrect")}
-                    </span>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-medium text-slate-700 dark:text-slate-200">
+                        {student?.name ?? "Unknown student"}
+                        {stage && <span className="ml-2 text-xs font-normal text-slate-400">&middot; {stage.label}</span>}
+                      </span>
+                      {r.correct !== null && (
+                        <span
+                          className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${
+                            r.correct
+                              ? "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400"
+                              : "bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-400"
+                          }`}
+                        >
+                          {r.correct ? "Correct" : "Incorrect"}
+                        </span>
+                      )}
+                      {r.mark !== null && r.mark !== undefined && (
+                        <span className="shrink-0 text-xs font-semibold text-slate-500">{r.mark} marks</span>
+                      )}
+                    </div>
+                    {/* The answer itself, on its own line and allowed to wrap --
+                        a teacher discussing feedback needs to read the whole
+                        thing, not a clipped fragment squeezed beside a badge. */}
+                    {r.answer ? (
+                      <p className="mt-1 whitespace-pre-wrap break-words text-slate-600 dark:text-slate-300">
+                        {r.answer}
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-xs italic text-slate-400">
+                        This activity reported no answer text &mdash; only whether it was correct.
+                      </p>
+                    )}
                   </li>
                 );
               })}

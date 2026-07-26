@@ -139,15 +139,25 @@ def duplicate_activity(activity_id: str, teacher: dict = Depends(get_current_tea
 
 
 @router.delete("/{activity_id}")
-def delete_activity(activity_id: str, teacher: dict = Depends(get_current_teacher)):
+def delete_activity(activity_id: str, force: bool = False, teacher: dict = Depends(get_current_teacher)):
+    """Refusing outright to delete a used activity left teachers stuck with a
+    list they couldn't tidy. Now it deletes -- but a first attempt on a used
+    activity returns 409 with the session count so the UI can say exactly
+    what else goes with it, and only a confirmed `force` actually removes it.
+    Sessions, students and responses cascade (see the FKs in db/models.py),
+    so this really does discard that lesson history."""
     _get_owned_activity(activity_id, teacher)
-    if store.has_sessions_for_activity(activity_id):
+    session_count = store.count_sessions_for_activity(activity_id)
+    if session_count and not force:
         raise HTTPException(
-            status_code=400,
-            detail="This activity has been used in one or more sessions and can't be deleted. Duplicate it to make changes, or keep it for your records.",
+            status_code=409,
+            detail=(
+                f"This activity has been used in {session_count} session{'s' if session_count != 1 else ''}. "
+                "Deleting it also deletes those sessions and the student responses in them."
+            ),
         )
     store.delete_activity(activity_id)
-    return {"deleted": True}
+    return {"deleted": True, "sessions_deleted": session_count}
 
 
 @router.get("/{activity_id}/raw", response_class=HTMLResponse)

@@ -69,7 +69,26 @@ export default function ActivitiesPage() {
       await api.delete(`/api/activities/${activityId}`);
       setActivities((prev) => prev.filter((a) => a.id !== activityId));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not delete activity");
+      // 409 means the activity has session history. Rather than refusing --
+      // which left teachers unable to tidy their list at all -- say exactly
+      // what else would be deleted and let them decide.
+      const message = err instanceof Error ? err.message : "Could not delete activity";
+      if (message.includes("has been used in")) {
+        if (window.confirm(`${message}\n\nDelete it anyway?`)) {
+          try {
+            await api.delete(`/api/activities/${activityId}?force=true`);
+            setActivities((prev) => prev.filter((a) => a.id !== activityId));
+            return;
+          } catch (forceErr) {
+            setError(forceErr instanceof Error ? forceErr.message : "Could not delete activity");
+            return;
+          } finally {
+            setPending(null);
+          }
+        }
+        return;
+      }
+      setError(message);
     } finally {
       setPending(null);
     }
