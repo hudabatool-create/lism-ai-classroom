@@ -73,6 +73,9 @@ class SessionModel(Base):
     copy_paste_protection: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     focus_monitoring: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     max_warnings: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    # "none" | "chime" | "bell" | "school_bell" -- played on both teacher and
+    # student screens when a stage timer reaches zero.
+    timer_sound: Mapped[str] = mapped_column(String, nullable=False, default="chime")
 
 
 class Student(Base):

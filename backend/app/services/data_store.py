@@ -109,6 +109,7 @@ def _session_dict(row: SessionModel) -> dict:
         "copy_paste_protection": row.copy_paste_protection,
         "focus_monitoring": row.focus_monitoring,
         "max_warnings": row.max_warnings,
+        "timer_sound": row.timer_sound,
     }
 
 
@@ -415,6 +416,7 @@ class DataStore:
                 copy_paste_protection=(session_type == "assessment"),
                 focus_monitoring=(session_type == "assessment"),
                 max_warnings=3,
+                timer_sound="chime",
             )
             db.add(row)
             db.commit()
@@ -426,6 +428,7 @@ class DataStore:
         copy_paste_protection: bool | None = None,
         focus_monitoring: bool | None = None,
         max_warnings: int | None = None,
+        timer_sound: str | None = None,
     ) -> dict:
         with self._lock, SessionLocal() as db:
             row = db.get(SessionModel, session_id)
@@ -435,6 +438,8 @@ class DataStore:
                 row.focus_monitoring = focus_monitoring
             if max_warnings is not None:
                 row.max_warnings = max_warnings
+            if timer_sound is not None:
+                row.timer_sound = timer_sound
             db.commit()
             return _session_dict(row)
 

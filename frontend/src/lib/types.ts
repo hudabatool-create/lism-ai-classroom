@@ -83,6 +83,7 @@ export interface SessionInfo {
   copy_paste_protection: boolean;
   focus_monitoring: boolean;
   max_warnings: number;
+  timer_sound: "none" | "chime" | "bell" | "school_bell";
 }
 
 export interface Student {

@@ -15,6 +15,10 @@ from app.services.websocket_manager import manager
 
 router = APIRouter(prefix="/api", tags=["sessions"])
 
+# Generated in the browser via Web Audio -- no audio files to host, and it
+# still works with no network.
+TIMER_SOUNDS = ("none", "chime", "bell", "school_bell")
+
 
 def _join_url(code: str) -> str:
     return f"{settings.frontend_origin}/join/{code}"
@@ -88,6 +92,7 @@ class SessionSettingsRequest(BaseModel):
     copy_paste_protection: bool | None = None
     focus_monitoring: bool | None = None
     max_warnings: int | None = None
+    timer_sound: str | None = None
 
 
 @router.patch("/sessions/{session_id}/settings")
@@ -102,11 +107,14 @@ async def update_session_settings(
         raise HTTPException(status_code=404, detail="Session not found")
     if payload.max_warnings is not None and not 1 <= payload.max_warnings <= 10:
         raise HTTPException(status_code=400, detail="Maximum warnings must be between 1 and 10")
+    if payload.timer_sound is not None and payload.timer_sound not in TIMER_SOUNDS:
+        raise HTTPException(status_code=400, detail=f"Timer sound must be one of: {', '.join(TIMER_SOUNDS)}")
     updated = store.update_session_settings(
         session_id,
         copy_paste_protection=payload.copy_paste_protection,
         focus_monitoring=payload.focus_monitoring,
         max_warnings=payload.max_warnings,
+        timer_sound=payload.timer_sound,
     )
     await manager.broadcast(
         updated["code"],
@@ -115,6 +123,7 @@ async def update_session_settings(
             "copyPasteProtection": updated["copy_paste_protection"],
             "focusMonitoring": updated["focus_monitoring"],
             "maxWarnings": updated["max_warnings"],
+            "timerSound": updated["timer_sound"],
         },
     )
     return updated

@@ -1,9 +1,10 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import StatCard from "@/components/StatCard";
 import { api } from "@/lib/api";
+import { playTimerSound, TIMER_SOUND_OPTIONS, type TimerSound } from "@/lib/timerSound";
 import type {
   Activity,
   FocusViolation,
@@ -214,6 +215,7 @@ export default function LiveSessionPage() {
               copy_paste_protection: msg.copyPasteProtection,
               focus_monitoring: msg.focusMonitoring,
               max_warnings: msg.maxWarnings,
+              timer_sound: msg.timerSound ?? prev.session.timer_sound,
             },
           };
         }
@@ -240,6 +242,23 @@ export default function LiveSessionPage() {
     detail?.session.stage_duration_seconds ?? null,
     detail?.session.stage_status === "running"
   );
+
+  // Time's up: alert the teacher and hold. Pacing stays with them, so this
+  // deliberately never advances the stage on its own -- it only prompts.
+  const [timeUp, setTimeUp] = useState(false);
+  const expiredForRef = useRef<string | null>(null);
+  useEffect(() => {
+    const s = detail?.session;
+    if (!s || s.stage_status !== "running" || remaining !== "0:00" || !s.stage_started_at) return;
+    if (expiredForRef.current === s.stage_started_at) return;
+    expiredForRef.current = s.stage_started_at;
+    setTimeUp(true);
+    playTimerSound(s.timer_sound);
+  }, [remaining, detail?.session]);
+
+  useEffect(() => {
+    if (detail?.session.stage_status === "running" && remaining !== "0:00") setTimeUp(false);
+  }, [detail?.session.stage_status, remaining]);
 
   async function handleEnd() {
     if (!detail) return;
@@ -297,7 +316,7 @@ export default function LiveSessionPage() {
     }
   }
 
-  async function handleSetting(patch: Record<string, boolean | number>) {
+  async function handleSetting(patch: Record<string, boolean | number | string>) {
     if (!detail) return;
     // The WebSocket broadcast updates local state, so don't set it here too.
     await api.patch(`/api/sessions/${detail.session.id}/settings`, patch);
@@ -334,6 +353,34 @@ export default function LiveSessionPage() {
   } = detail;
   const stages = activity.manifest.stages;
   const isLastStage = session.current_stage_index >= stages.length - 1;
+
+  /** Students in one status (or all, when omitted), each labelled with the
+   *  stage they last answered and how far through they are -- a bare count
+   *  tells the teacher three need help but not which three. */
+  function studentsWithStatus(status?: StudentStatusValue) {
+    const answeredStages = (studentId: string) =>
+      new Set(responses.filter((r) => r.student_id === studentId && r.stage_id).map((r) => r.stage_id));
+
+    return students
+      .filter((s) => (status ? student_statuses[s.id]?.status === status : true))
+      .map((s) => {
+        const done = answeredStages(s.id);
+        const percent = stages.length ? Math.round((done.size / stages.length) * 100) : 0;
+        const lastAnswered = [...stages].reverse().find((st) => done.has(st.id));
+        const info = student_statuses[s.id];
+        return {
+          id: s.id,
+          name: s.name,
+          detail: (
+            <>
+              {lastAnswered ? lastAnswered.label : "Not started"} · {percent}%
+              {info?.violation_count ? ` · ${info.violation_count} focus` : ""}
+              {info?.help_requests ? ` · asked for help ${info.help_requests}×` : ""}
+            </>
+          ),
+        };
+      });
+  }
 
   return (
     <div>
@@ -440,6 +487,41 @@ export default function LiveSessionPage() {
             </div>
           </div>
 
+          {timeUp && session.stage_status === "running" && (
+            <div className="mt-3 rounded-lg border border-red-300 bg-red-50 px-4 py-3 dark:border-red-800 dark:bg-red-950">
+              <p className="text-sm font-semibold text-red-700 dark:text-red-400">
+                ⏰ Time&apos;s up for {current_stage?.label ?? "this section"}
+              </p>
+              <p className="mt-1 text-xs text-red-600 dark:text-red-400">
+                Students have been told to stop and wait. Nothing has advanced &mdash; you decide when to move on.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {!isLastStage && (
+                  <button
+                    onClick={handleStartStage}
+                    disabled={stageActionPending}
+                    className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+                  >
+                    Start next section
+                  </button>
+                )}
+                <button
+                  onClick={handleExtend}
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
+                >
+                  Give them 1 more minute
+                </button>
+                <button
+                  onClick={handleEndStage}
+                  disabled={stageActionPending}
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-100 disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-800"
+                >
+                  End this section
+                </button>
+              </div>
+            </div>
+          )}
+
           {session.stage_status === "paused" && (
             <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300">
               Paused. Students can&apos;t type until you resume, and nothing they have already written is lost.
@@ -491,6 +573,38 @@ export default function LiveSessionPage() {
               checked={session.focus_monitoring}
               onChange={(value) => handleSetting({ focus_monitoring: value })}
             />
+            <div>
+              <label
+                htmlFor="timer-sound"
+                className="block text-sm font-medium text-slate-800 dark:text-slate-200"
+              >
+                Time&apos;s-up sound
+              </label>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Played on your screen and every student&apos;s when a section&apos;s timer reaches zero.
+              </p>
+              <div className="mt-2 flex items-center gap-2">
+                <select
+                  id="timer-sound"
+                  value={session.timer_sound}
+                  onChange={(e) => handleSetting({ timer_sound: e.target.value })}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-900"
+                >
+                  {TIMER_SOUND_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => playTimerSound(session.timer_sound as TimerSound)}
+                  className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
+                >
+                  Test
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -555,13 +669,28 @@ export default function LiveSessionPage() {
       )}
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
-        <StatCard label="Joined" value={students.length} />
-        <StatCard label="Working" value={status_summary.working ?? 0} />
-        <StatCard label="Completed" value={status_summary.completed ?? 0} />
-        <StatCard label="Waiting" value={status_summary.waiting ?? 0} />
-        <StatCard label="Needs Help" value={status_summary.needs_help ?? 0} />
-        <StatCard label="Inactive" value={status_summary.inactive ?? 0} />
-        <StatCard label="Locked" value={status_summary.locked ?? 0} />
+        <StatCard label="Joined" value={students.length} students={studentsWithStatus()} />
+        <StatCard label="Working" value={status_summary.working ?? 0} students={studentsWithStatus("working")} />
+        <StatCard
+          label="Completed"
+          value={status_summary.completed ?? 0}
+          students={studentsWithStatus("completed")}
+          tone="good"
+        />
+        <StatCard label="Waiting" value={status_summary.waiting ?? 0} students={studentsWithStatus("waiting")} />
+        <StatCard
+          label="Needs Help"
+          value={status_summary.needs_help ?? 0}
+          students={studentsWithStatus("needs_help")}
+          tone="alert"
+        />
+        <StatCard label="Inactive" value={status_summary.inactive ?? 0} students={studentsWithStatus("inactive")} />
+        <StatCard
+          label="Locked"
+          value={status_summary.locked ?? 0}
+          students={studentsWithStatus("locked")}
+          tone="alert"
+        />
       </div>
 
       <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">

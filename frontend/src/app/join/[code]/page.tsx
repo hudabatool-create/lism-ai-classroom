@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Logo from "@/components/Logo";
 import { api } from "@/lib/api";
+import { playTimerSound, type TimerSound } from "@/lib/timerSound";
 import type { LessonManifest, SessionType, Stage } from "@/lib/types";
 
 // Scoped per session code so a shared classroom device doesn't carry one
@@ -96,6 +97,7 @@ interface JoinInfo {
     copy_paste_protection: boolean;
     focus_monitoring: boolean;
     max_warnings: number;
+    timer_sound: TimerSound;
   };
   activity: { id: string; title: string; manifest: LessonManifest };
   current_stage: Stage | null;
@@ -127,6 +129,24 @@ export default function JoinPage() {
     status: "idle",
   });
   const remainingSeconds = useStageTimer(timer.startedAt, timer.duration, timer.status);
+  const [timeUp, setTimeUp] = useState(false);
+  // Fires once per stage as the countdown crosses zero. Keyed on the stage
+  // start so starting the next stage re-arms it, and a refresh mid-expired
+  // stage doesn't replay the sound at someone who already heard it.
+  const expiredForRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (remainingSeconds !== 0 || timer.status !== "running" || !timer.startedAt) return;
+    if (expiredForRef.current === timer.startedAt) return;
+    expiredForRef.current = timer.startedAt;
+    setTimeUp(true);
+    playTimerSound(info?.session.timer_sound);
+  }, [remainingSeconds, timer.status, timer.startedAt, info?.session.timer_sound]);
+
+  // Clear the notice as soon as the teacher moves the class on.
+  useEffect(() => {
+    if (timer.status !== "running" || remainingSeconds === 0) return;
+    setTimeUp(false);
+  }, [timer.status, remainingSeconds]);
   const [helpSent, setHelpSent] = useState(false);
   const [coachOpen, setCoachOpen] = useState(false);
   const [coachMessages, setCoachMessages] = useState<{ role: "student" | "coach"; content: string }[]>([]);
@@ -327,6 +347,7 @@ export default function JoinPage() {
                   copy_paste_protection: msg.copyPasteProtection,
                   focus_monitoring: msg.focusMonitoring,
                   max_warnings: msg.maxWarnings,
+                  timer_sound: msg.timerSound ?? prev.session.timer_sound,
                 },
               }
             : prev
@@ -506,6 +527,11 @@ export default function JoinPage() {
           <span className="opacity-90">
             {paused ? "paused by your teacher" : remainingSeconds === 0 ? "time's up — wait for your teacher" : "left"}
           </span>
+        </div>
+      )}
+      {timeUp && !report && (
+        <div className="bg-red-600 px-4 py-3 text-center text-base font-semibold text-white">
+          ⏰ Time&apos;s Up! Please stop working and wait for your teacher&apos;s instructions.
         </div>
       )}
       {reconnected && (
