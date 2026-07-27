@@ -40,20 +40,43 @@ LISM CLASSROOM INTEGRATION ADDENDUM (required, in addition to everything above):
    order as the slides/sections.
 2. Add an optional LISM Classroom SDK hook, guarded so the file still works
    perfectly standalone with zero dependencies (same pattern as the optional
-   MathJax upgrade above): listen with
-   window.addEventListener('message', ...) for commands of the shape
-   {type:'lism:command', command:'start_stage'|'stage_ended', stage} and use
-   them to control which slide/section is visible and when its timer starts,
-   instead of relying only on the learner's own Next/Previous and
-   click-to-start behavior. When no such commands ever arrive (the file was
-   opened directly), everything must behave exactly as specified above with
-   no LISM integration at all.
-3. When a student's answer is accepted/marked on any slide/section, also call
+   MathJax upgrade above). Detect LISM with `window.parent !== window`.
+   Listen with window.addEventListener('message', ...) for
+   {type:'lism:command', command, ...} and handle:
+     start_stage (payload: stage)  -> show only that slide/section
+     stage_ended                   -> show "Waiting for your teacher..."
+     pause                         -> freeze input, keep all typed work
+     resume                        -> unfreeze, restore the previous view
+     lock (payload: reason)        -> disable every input, show the reason
+     unlock                        -> re-enable inputs
+     set_config (copyPasteProtection, focusMonitoring, maxWarnings)
+                                   -> apply the teacher's settings. When
+                                      copyPasteProtection is on, block copy,
+                                      cut, paste and contextmenu INSIDE
+                                      ANSWER BOXES ONLY, never page-wide.
+     time_update (elapsedSeconds)  -> store for the completion report; never
+                                      render your own countdown, LISM shows it
+   IGNORE any command you do not recognise, silently — never throw. This lets
+   LISM add commands later without regenerating the activity.
+   When no commands ever arrive (the file was opened directly), everything
+   must behave exactly as specified above with no LISM integration at all.
+3. When a student's answer is accepted/marked on any slide/section, call
    window.parent.postMessage({type:'lism:event', event:'student_submitted',
-   stageId, correct, answer, mark}, '*') if window.parent !== window.
-4. This integration must never send data anywhere except via postMessage to
+   stageId, questionId, correct, answer, mark, maxMark, dok, rubricLevel,
+   keywordsUsed}, '*') if window.parent !== window.
+   ALWAYS include `answer` with the student's actual text — the teacher's
+   live dashboard shows it for feedback, and sending only `correct` leaves
+   them nothing to discuss. Also emit, when they apply: activity_ready
+   (on load), stage_viewed, stage_completed, activity_completed, and
+   help_requested.
+4. Teacher preview: when the URL contains ?preview=1, show Previous/Next
+   controls and a section counter so every stage can be reviewed, ignore
+   sequential locking, and emit NO events at all — preview must never create
+   student data.
+5. This integration must never send data anywhere except via postMessage to
    window.parent when embedded — the "fully offline, nothing sent anywhere"
-   promise still holds for standalone use outside LISM.
+   promise still holds for standalone use outside LISM. Drawings and photos
+   stay on the device; LISM is told only that an attachment exists.
 Return ONLY the raw HTML, no markdown fences.
 """
 
