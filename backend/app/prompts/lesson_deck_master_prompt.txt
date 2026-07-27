@@ -175,3 +175,112 @@ One consistent colour scheme; DOK badges colour coded (DOK1 green, DOK2 blue, DO
 
 11. SELF-CHECK BEFORE YOU FINISH
 State briefly that you have verified: exactly 10 slides; nothing overlaps at 1366×768; no timers, countdowns or time-based logic anywhere in the file — only recommended durations beside section titles; arrow keys inert while typing; all three ALL/MOST/SOME pathways generated in full with a working chooser that preserves typed work when switching; every pathway including ALL graded out of the full 10 with no cap or scaling; one single pathway-appropriate Challenge / Extension Task that appears only after all four DOK questions are accepted (never one per DOK), carries no marks, and produces a content-specific achievement certificate that saves as an A4 landscape PDF offline; Main Activity model answers sealed until all four graded questions are accepted; the student’s marks against the rubric visible out of 10 at all times; every other model-answer toggle locked until submission; each DOK marked on submit with a live total out of 10 and teacher override; every answer box validated by its declared type with a specific rejection reason; code boxes take Tab as indentation without trapping focus and preserve whitespace; the formula preview renders what was typed; the sketch pad works with mouse, finger and stylus without scrolling the slide, and undo/clear behave; paste, file-choose, drag-drop and camera capture all attach an image with limits enforced; math/chem/code/draw/image/RTL features present and working offline as required by the subject profile.
+
+
+================================================================================
+LISM AI CLASSROOM INTEGRATION (required — keep this section when you paste this
+prompt into any AI, including outside LISM. Without it the generated file has no
+manifest, and LISM cannot show the lesson's stages or let the teacher pace them:
+the whole lesson collapses into one unnamed section.)
+================================================================================
+LISM CLASSROOM INTEGRATION ADDENDUM (required, in addition to everything above):
+1. Emit a machine-readable manifest as an inert script tag in <head>:
+   <script type="application/json" id="lism-manifest">{...}</script>
+   It must include: lessonType ("lesson-deck" or "worksheet"), subject, grade,
+   week, topic, learningObjectives ({all, most, some} as strings), keywords
+   (array), dok (array of {level, label, marks} matching the rubric above),
+   deliveryMode ("lesson" or "homework"), sessionType ("lesson"), and stages:
+   an ordered array with one entry per slide/section defined above, each
+   {id, label, type, durationSeconds, sequentialLock: true}, in the same
+   order as the slides/sections.
+2. Add an optional LISM Classroom SDK hook, guarded so the file still works
+   perfectly standalone with zero dependencies (same pattern as the optional
+   MathJax upgrade above). Detect LISM with `window.parent !== window`.
+   Listen with window.addEventListener('message', ...) for
+   {type:'lism:command', command, ...} and handle:
+     start_stage (payload: stage)  -> show only that slide/section
+     stage_ended                   -> show "Waiting for your teacher..."
+     pause                         -> freeze input, keep all typed work
+     resume                        -> unfreeze, restore the previous view
+     lock (payload: reason)        -> disable every input, show the reason
+     unlock                        -> re-enable inputs
+     set_config (copyPasteProtection, focusMonitoring, maxWarnings)
+                                   -> apply the teacher's settings. When
+                                      copyPasteProtection is on, block copy,
+                                      cut, paste and contextmenu INSIDE
+                                      ANSWER BOXES ONLY, never page-wide.
+     time_update (elapsedSeconds)  -> store for the completion report; never
+                                      render your own countdown, LISM shows it
+   IGNORE any command you do not recognise, silently — never throw. This lets
+   LISM add commands later without regenerating the activity.
+   When no commands ever arrive (the file was opened directly), everything
+   must behave exactly as specified above with no LISM integration at all.
+3. When a student's answer is accepted/marked on any slide/section, call
+   window.parent.postMessage({type:'lism:event', event:'student_submitted',
+   stageId, questionId, correct, answer, mark, maxMark, dok, rubricLevel,
+   keywordsUsed}, '*') if window.parent !== window.
+   ALWAYS include `answer` with the student's actual text — the teacher's
+   live dashboard shows it for feedback, and sending only `correct` leaves
+   them nothing to discuss. Also emit, when they apply: activity_ready
+   (on load), stage_viewed, stage_completed, activity_completed, and
+   help_requested.
+4. Teacher preview: when the URL contains ?preview=1, show Previous/Next
+   controls and a section counter so every stage can be reviewed, ignore
+   sequential locking, and emit NO events at all — preview must never create
+   student data.
+5. This integration must never send data anywhere except via postMessage to
+   window.parent when embedded — the "fully offline, nothing sent anywhere"
+   promise still holds for standalone use outside LISM. Drawings and photos
+   stay on the device; LISM is told only that an attachment exists.
+Return ONLY the raw HTML, no markdown fences.
+
+STAGE LIST — the manifest's `stages` array must contain ONE ENTRY PER SECTION of
+this lesson, in the order they appear, using this shape:
+  {"id":"starter","label":"Starter","type":"starter","durationSeconds":300,"sequentialLock":true,"marks":null}
+Use the recommended duration from this prompt for durationSeconds, and set
+"marks": 10 on the Main Activity / Main Task stage only. Give every section in
+the HTML a matching data-stage="<id>" attribute. Suggested ids, in order:
+  title, keywords, starter, objectives, main-teaching, guided-practice,
+  main-activity, rubric, connection, exit-ticket, reflection
+(Use only the sections this lesson actually has.)
+
+SECTION VISIBILITY — students must see ONLY the section the teacher has started.
+On receiving start_stage, show that section and hide the others; between stages
+show "Waiting for your teacher…". The teacher's dashboard lists every stage and
+starts them one at a time. Never reveal a later section before its start_stage
+arrives, and never advance on your own.
+
+EDUCATIONAL QUALITY REQUIREMENTS (mandatory — these decide whether the activity is usable in a real classroom):
+
+Every question must be about THIS topic's actual content. A question that would still make sense
+if you swapped in a different topic is not specific enough — rewrite it.
+
+BANNED, because they assess nothing:
+- "What do you remember about X?" / "What do you already know?"
+- "Which statement is correct?" with invented options like "a correct statement" or "a distractor"
+- "True or false: X always works the same way"
+- Any option text that describes what the option is ("a common misconception") instead of stating it
+- Restating the topic name as though it were an answer
+
+REQUIRED instead — choose the verb that actually fits the content:
+  Analyse this diagram/data · Predict what happens when... · Explain why...
+  Identify the error in this worked example · Classify these examples · Interpret this graph
+  Compare these two cases · Complete the missing step · Label the diagram
+  Match each concept to its use · Solve this scenario · Justify which explanation is better
+  Order these steps · Correct this misconception
+
+For multiple choice, every distractor must be a real, plausible mistake a student at this grade
+actually makes — a specific wrong value, a confused term, a step applied in the wrong order.
+Never write a placeholder distractor. If you cannot write plausible wrong answers for this
+content, use an open response question instead.
+
+Pitch to the stated grade: correct terminology, realistic numbers, age-appropriate context.
+Tie every question to the stated learning objectives.
+
+OPENING QUESTION — set the tone by activity type:
+- Lesson deck / worksheet: a diagnostic retrieval question targeting a specific prior idea this
+  lesson builds on, or a likely misconception — not a general "what do you know".
+- Simulation: an observation or a prediction about a variable before the student changes anything.
+- Coding challenge: predict this code's output, find the bug, or complete the missing line.
+- Escape room: a puzzle that cannot be solved without applying the concept.
+- Quiz / exit ticket: a specific applied item, not a definition-recall item.

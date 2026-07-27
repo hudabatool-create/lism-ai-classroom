@@ -932,10 +932,15 @@ def _build_master_prompt(prompt_file: str, subject, grade, topic, week, previous
         .replace("[WEEK X]", week or "1")
         .replace("[PREVIOUS LESSON TOPIC]", previous_topic or "the previous lesson")
     )
-    # The master prompts own the lesson framework; the pedagogy rules only
-    # constrain how individual questions are written, so they compose rather
-    # than conflict.
-    return filled + "\n\n" + PEDAGOGY_REQUIREMENTS + "\n\n" + LISM_INTEGRATION_ADDENDUM
+    # The prompt files now carry the integration and pedagogy sections inline,
+    # so that a teacher pasting the same document into an AI outside LISM gets
+    # a file with a manifest. Only append what isn't already there -- sending
+    # the model the same rules twice wastes tokens and muddies them.
+    if "lism-manifest" not in filled:
+        filled += "\n\n" + LISM_INTEGRATION_ADDENDUM
+    if "EDUCATIONAL QUALITY REQUIREMENTS" not in filled:
+        filled += "\n\n" + PEDAGOGY_REQUIREMENTS
+    return filled
 
 
 def _generate_with_openai(
