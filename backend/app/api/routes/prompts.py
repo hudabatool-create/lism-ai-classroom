@@ -14,21 +14,60 @@ from app.services.data_store import store
 
 router = APIRouter(prefix="/api/prompts", tags=["prompts"])
 
+# Every prompt a teacher can copy. The two full-lesson prompts keep the whole
+# ALL/MOST/SOME + DOK framework; the rest are single-purpose activities with
+# their own natural structure. All of them cover every subject including
+# Arabic (RTL, diacritic normalisation) and carry the LISM manifest contract,
+# so an activity built from any of them uploads and is teacher-paced.
+#
+# The version numbers here must match the files -- these titles once read v3
+# and v1 while the files were already v10 and v8, which is exactly the kind of
+# drift that makes a teacher think they have the wrong prompt.
 _BUILTIN_PROMPTS = [
+    # --- Full lesson frameworks -------------------------------------------
     {
         "id": "builtin-lesson-deck",
-        "title": "Interactive Lesson Deck (Master Prompt v3)",
-        "category": "All Subjects",
+        "title": "Interactive Lesson Deck (Master Prompt v10)",
+        "category": "Full Lesson",
         "activity_type": "Interactive Lesson Deck",
         "file": "lesson_deck_master_prompt.txt",
     },
     {
         "id": "builtin-worksheet",
-        "title": "Interactive Worksheet (Master Prompt v1)",
-        "category": "All Subjects",
+        "title": "Interactive Worksheet (Master Prompt v8)",
+        "category": "Full Lesson",
         "activity_type": "Interactive Worksheet",
         "file": "worksheet_master_prompt.txt",
     },
+    # --- Single-purpose activities ----------------------------------------
+    {"id": "builtin-starter", "title": "Starter / Retrieval Activity", "category": "Lesson Phase",
+     "activity_type": "Starter Activity", "file": "starter_prompt.txt"},
+    {"id": "builtin-poll", "title": "Poll / Exit Ticket", "category": "Lesson Phase",
+     "activity_type": "Poll", "file": "poll_prompt.txt"},
+    {"id": "builtin-quiz", "title": "Quiz", "category": "Assessment",
+     "activity_type": "Quiz", "file": "quiz_prompt.txt"},
+    {"id": "builtin-mcq", "title": "Multiple Choice Questions", "category": "Assessment",
+     "activity_type": "Multiple Choice", "file": "mcq_prompt.txt"},
+    {"id": "builtin-true-false", "title": "True / False with Justification", "category": "Assessment",
+     "activity_type": "True/False", "file": "true_false_prompt.txt"},
+    {"id": "builtin-matching", "title": "Matching Activity", "category": "Interactive",
+     "activity_type": "Matching", "file": "matching_prompt.txt"},
+    {"id": "builtin-drag-drop", "title": "Drag & Drop Activity", "category": "Interactive",
+     "activity_type": "Drag & Drop", "file": "drag_drop_prompt.txt"},
+    {"id": "builtin-flashcards", "title": "Flashcards", "category": "Interactive",
+     "activity_type": "Flashcards", "file": "flashcards_prompt.txt"},
+    {"id": "builtin-crossword", "title": "Crossword", "category": "Interactive",
+     "activity_type": "Crossword", "file": "crossword_prompt.txt"},
+    {"id": "builtin-brainstorm", "title": "Brainstorm Board", "category": "Thinking",
+     "activity_type": "Brainstorm Board", "file": "brainstorm_prompt.txt"},
+    {"id": "builtin-game", "title": "Learning Game", "category": "Games",
+     "activity_type": "Learning Game", "file": "game_prompt.txt"},
+    {"id": "builtin-escape-room", "title": "Escape Room", "category": "Games",
+     "activity_type": "Escape Room", "file": "escape_room_prompt.txt"},
+    {"id": "builtin-simulation", "title": "Simulation", "category": "Exploration",
+     "activity_type": "Simulation", "file": "simulation_prompt.txt"},
+    {"id": "builtin-coding", "title": "Coding Challenge", "category": "Exploration",
+     "activity_type": "Coding Challenge", "file": "coding_challenge_prompt.txt"},
 ]
 
 

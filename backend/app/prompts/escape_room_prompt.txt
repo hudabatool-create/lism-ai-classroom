@@ -1,0 +1,171 @@
+Master Prompt — Escape Room (LISM AI Classroom)
+Fill in the bracketed fields, then paste this whole prompt into ChatGPT, Claude, Gemini or any AI tool.
+Save the HTML it returns as a .html file and upload it to LISM AI Classroom.
+
+Fill in: [TOPIC NAME] · [SUBJECT] · [GRADE] · [WEEK X]
+
+Build a single self-contained interactive HTML escape room for [TOPIC NAME] — [SUBJECT], Grade [GRADE], Week [WEEK X].
+One HTML file. Inline CSS and JS only, no external assets, no build step, no markdown fences in your reply.
+It must open and work correctly by double-clicking the file, offline, with no LISM present — and work as a
+teacher-paced activity when uploaded to LISM.
+
+A story with locks that only open when students apply the topic — each puzzle needs the concept, not a guess.
+
+
+1. SUBJECT PROFILE (set this first — it drives layout, language and validation)
+
+State this config object at the top of the file and make every part of the activity obey it. Infer
+sensible values from [SUBJECT] and [TOPIC NAME]:
+
+const PROFILE = {
+  subject:'[SUBJECT]', grade:'[GRADE]', week:'[WEEK X]', topic:'[TOPIC NAME]',
+  lang:'en',      // 'en' | 'ar' | 'fr' | 'es' | 'ur' | 'hi' — language of instruction
+  dir:'ltr',      // 'rtl' for Arabic and Urdu — mirrors the whole layout
+  math:false,     // true → maths rendering + symbol palette
+  chem:false,     // true → chemical formula handling
+  code:false,     // true → code editor behaviour
+  images:true     // true → allow image attachment where it makes sense
+};
+
+2. LANGUAGE, SCRIPT AND RTL — ALL SUBJECTS INCLUDING ARABIC (mandatory)
+
+This activity must work in any subject and any language the school teaches, Arabic included.
+
+- Set <html lang> and dir from PROFILE. When dir:'rtl', mirror the ENTIRE layout — headers, progress
+  indicators, buttons, cards, tables and badges all flow right-to-left. Next moves left, Previous moves
+  right visually, but arrow keys keep their logical meaning.
+- Keep numbers, formulae and code in dir:'ltr' islands inside RTL text so they do not reverse.
+- Arabic normalisation before comparing any answer: strip tashkeel/diacritics, remove tatweel (ـ),
+  unify alef (أ إ آ ٱ → ا), ى → ي, ة → ه, unify hamza forms, and convert Arabic-Indic digits
+  (٠١٢٣٤٥٦٧٨٩) to Western digits. "الْمَاء" and "الماء" must both be accepted.
+- Script-aware counting: count words for Arabic, Urdu and Hindi properly; for Chinese/Japanese use
+  characters ÷ 2. Never use a Latin-only regex to judge length.
+- Never apply an English vowel-based gibberish test to non-Latin script. For those, detect only
+  repeated-character runs and single-character spam.
+- French/Spanish/Urdu: accent-insensitive comparison for short answers, correct accents kept in the
+  model answers.
+- All on-screen instructions, buttons and feedback appear in PROFILE.lang. For a bilingual class, show
+  the term and its translation together.
+- Use a font stack that renders Arabic correctly and set a comfortable line-height for Arabic script.
+
+3. ACCESSIBILITY AND DEVICE SUPPORT
+
+Readable on a smart board and on a phone. Font sizes with clamp(), single column below 900px, touch
+targets at least 44px, inputs at least 16px so iOS does not zoom. Full keyboard operation, visible
+focus rings, and colour never used as the only signal. Nothing overlaps at any width.
+
+4. STRUCTURE
+
+Section 1 — THE STORY: a short scenario (four lines maximum) giving a reason to escape, connected to
+[TOPIC NAME].
+
+Sections 2–4 — LOCK 1, 2, 3: three puzzles rising in demand.
+  Lock 1 — identify or recall something precise from the topic.
+  Lock 2 — apply the topic to work out a value, word or sequence.
+  Lock 3 — reason or evaluate: the code comes from a justified conclusion.
+
+PUZZLE RULE: the code must be DERIVED from the topic. A student who does not understand the content
+must not be able to guess it. State the real answer in the code so the teacher can see it. Never use a
+code unrelated to the subject.
+
+Each lock: an input, a "Try the lock" button, a clear right/wrong response, and a hint button that
+narrows the thinking without giving the answer (log that a hint was used). A solved lock stays solved.
+
+Section 5 — ESCAPED: which lock was hardest and what they had to understand to open it.
+
+
+LISM AI CLASSROOM INTEGRATION (required — do not remove this section)
+
+Without this the uploaded file has no manifest, so LISM cannot show the activity's sections or let the
+teacher pace them, and the whole activity collapses into one unnamed block.
+
+A. Emit exactly one inert manifest in <head>:
+
+<script type="application/json" id="lism-manifest">
+{
+  "lessonType": "escape-room",
+  "subject": "[SUBJECT]", "grade": "[GRADE]", "week": "[WEEK X]", "topic": "[TOPIC NAME]",
+  "keywords": ["...", "..."],
+  "deliveryMode": "lesson", "sessionType": "lesson",
+  "stages": [
+    {"id":"story","label":"The Story","type":"activity","durationSeconds":120,"sequentialLock":true,"marks":null},
+    {"id":"puzzle-1","label":"Lock 1","type":"activity","durationSeconds":300,"sequentialLock":true,"marks":null},
+    {"id":"puzzle-2","label":"Lock 2","type":"activity","durationSeconds":300,"sequentialLock":true,"marks":null},
+    {"id":"puzzle-3","label":"Lock 3","type":"activity","durationSeconds":300,"sequentialLock":true,"marks":null},
+    {"id":"escaped","label":"Escaped — Reflection","type":"activity","durationSeconds":180,"sequentialLock":true,"marks":null}
+  ]
+}
+</script>
+
+Use exactly these stage ids and order. Give the matching section in the HTML a data-stage="<id>"
+attribute. If your activity genuinely needs more or fewer sections (for example a different number of
+cards or puzzles), keep the same naming pattern and list every one of them in the manifest.
+
+B. Detect LISM with `window.parent !== window`. When it is absent, run normally and self-paced.
+   When present, hand pacing to the teacher and listen for
+   {type:'lism:command', command, ...}:
+     start_stage (stage) -> show ONLY that section, enable its inputs
+     stage_ended         -> show "Waiting for your teacher…", disable that section
+     pause / resume      -> freeze / unfreeze, never losing typed work
+     lock (reason) / unlock
+     set_config (copyPasteProtection, focusMonitoring, maxWarnings)
+        -> when copyPasteProtection is on, block copy, cut, paste and right-click INSIDE ANSWER
+           BOXES ONLY, never page-wide
+     time_update (elapsedSeconds) -> store it; never render your own countdown, LISM shows the timer
+   Ignore any unrecognised command silently. Never throw.
+
+C. STUDENTS MUST SEE ONLY THE SECTION THE TEACHER HAS STARTED. Hide every other section until its
+   start_stage arrives. Never auto-advance, and never reveal a later section early.
+
+D. NO TIMERS OF YOUR OWN. No countdowns, clocks, progress rings, or time-based locking or advancing.
+   The recommended duration is metadata in the manifest and may be printed as text beside a section
+   title. LISM shows the one synchronised countdown.
+
+E. Report every accepted answer to the teacher's live dashboard:
+   window.parent.postMessage({type:'lism:event', event:'student_submitted',
+     stageId, questionId, correct, answer, mark, maxMark, keywordsUsed}, '*')
+   ALWAYS include `answer` with the student's actual text or choice — the teacher reads it aloud for
+   feedback, and sending only `correct` leaves them nothing to discuss.
+   Also emit activity_ready on load, stage_viewed when a section is shown, and activity_completed at
+   the end with the final score.
+
+F. Teacher preview: when the URL contains ?preview=1, show Previous/Next and a section counter, allow
+   every section to be viewed in any order, and emit NO events at all.
+
+G. Nothing is uploaded anywhere. Answers travel only via postMessage to the LISM page that embeds the
+   activity. Opened standalone, nothing leaves the device at all.
+
+
+EDUCATIONAL QUALITY (mandatory — this decides whether the activity is usable in a real classroom)
+
+Every question must be about THIS topic's actual content. If a question would still make sense with a
+different topic swapped in, it is not specific enough — rewrite it.
+
+BANNED, because they assess nothing:
+- "What do you remember about X?" / "What do you already know?"
+- Options written as descriptions ("a correct statement", "a distractor", "a common misconception")
+- "True or false: X always works the same way"
+- Restating the topic name as if it were an answer
+
+REQUIRED — choose the verb that fits the content: analyse this diagram/data · predict what happens
+when… · explain why… · identify the error · classify these · interpret this graph · compare these two
+cases · complete the missing step · label the diagram · order these steps · correct this misconception
+· justify which explanation is better.
+
+Every wrong option must be a real mistake a student at this grade actually makes — a specific wrong
+value, a confused term, a step in the wrong order. If you cannot write plausible wrong answers for this
+content, use an open response instead. Pitch the vocabulary, numbers and context to Grade [GRADE].
+
+FEEDBACK: every response gets specific feedback that says how to improve, never just "wrong". Show the
+correct answer only after the student has attempted it.
+
+
+SELF-CHECK BEFORE YOU FINISH
+
+State briefly that you have verified: the manifest is present, valid JSON, and lists every section with
+matching data-stage attributes; only the teacher-started section is visible inside LISM and everything
+works self-paced outside it; no timers or countdowns of your own anywhere; student_submitted is emitted
+on every accepted answer and always carries `answer`; ?preview=1 gives Previous/Next and emits nothing;
+the layout mirrors correctly with dir:'rtl' and Arabic answers are normalised before comparison; nothing
+overlaps at 1366×768 or on a 390px phone; every question is specific to [TOPIC NAME] with plausible
+wrong answers; and the file opens and works by double-clicking it offline.

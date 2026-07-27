@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { type FormEvent, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import type { Prompt } from "@/lib/types";
@@ -8,22 +8,30 @@ import type { Prompt } from "@/lib/types";
 const ACTIVITY_TYPES = [
   "Interactive Lesson Deck",
   "Interactive Worksheet",
+  "Starter Activity",
   "Quiz",
   "Multiple Choice",
+  "True/False",
   "Poll",
   "Exit Ticket",
   "Flashcards",
   "Matching",
+  "Drag & Drop",
+  "Crossword",
+  "Brainstorm Board",
+  "Learning Game",
+  "Escape Room",
+  "Simulation",
+  "Coding Challenge",
 ];
 
-const HANDOFF_KEY = "lism_prompt_handoff";
-
 export default function PromptLibraryPage() {
-  const router = useRouter();
   const [prompts, setPrompts] = useState<Prompt[]>([]);
   const [loading, setLoading] = useState(true);
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [copyError, setCopyError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ title: "", category: "", activity_type: ACTIVITY_TYPES[0], body: "" });
   const [saving, setSaving] = useState(false);
@@ -60,9 +68,18 @@ export default function PromptLibraryPage() {
     await api.delete(`/api/prompts/${id}`);
   }
 
-  function handleUseInGenerator(prompt: Prompt) {
-    sessionStorage.setItem(HANDOFF_KEY, JSON.stringify({ activity_type: prompt.activity_type, body: prompt.body }));
-    router.push("/dashboard/activities/new");
+  // Teachers take the prompt to their own AI tool, so copying it is the action
+  // that matters -- LISM's job begins when the finished HTML is uploaded.
+  async function handleCopy(prompt: Prompt) {
+    try {
+      await navigator.clipboard.writeText(prompt.body);
+      setCopiedId(prompt.id);
+      setTimeout(() => setCopiedId((id) => (id === prompt.id ? null : id)), 2500);
+    } catch {
+      // Blocked on insecure origins and by some school browser policies.
+      setExpanded(prompt.id);
+      setCopyError(prompt.id);
+    }
   }
 
   const visible = showFavoritesOnly ? prompts.filter((p) => p.is_favorite) : prompts;
@@ -73,8 +90,16 @@ export default function PromptLibraryPage() {
         <div>
           <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Prompt Library</h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Only prompts that generate LISM-compatible activities live here. Save your own, favorite the ones you
-            reuse, and load any of them straight into the generator.
+            Every official prompt builds a LISM-ready activity for any subject, including Arabic. Copy one into
+            ChatGPT, Claude or Gemini, then{" "}
+            <Link href="/dashboard/activities/upload" className="text-brand-600 hover:underline">
+              upload the HTML
+            </Link>{" "}
+            to run it live. New to this? Follow the{" "}
+            <Link href="/dashboard/activities/new" className="text-brand-600 hover:underline">
+              step-by-step guide
+            </Link>
+            .
           </p>
         </div>
         <button
@@ -199,12 +224,18 @@ export default function PromptLibraryPage() {
                 </pre>
               )}
 
+              {copyError === prompt.id && (
+                <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                  Your browser blocked the copy. Select the prompt text above and copy it manually.
+                </p>
+              )}
+
               <div className="mt-3 flex gap-2">
                 <button
-                  onClick={() => handleUseInGenerator(prompt)}
+                  onClick={() => handleCopy(prompt)}
                   className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
                 >
-                  Use in Generator
+                  {copiedId === prompt.id ? "Copied!" : "Copy Prompt"}
                 </button>
                 {!prompt.is_builtin && (
                   <button

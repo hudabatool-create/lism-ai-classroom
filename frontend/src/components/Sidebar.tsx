@@ -8,7 +8,9 @@ import { api } from "@/lib/api";
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Overview" },
   { href: "/dashboard/activities", label: "My Activities" },
-  { href: "/dashboard/activities/new", label: "Generate Activity with AI" },
+  // Activities are authored in the teacher's own AI tool from a LISM master
+  // prompt, then uploaded -- LISM paces and monitors rather than generates.
+  { href: "/dashboard/activities/new", label: "Create an Activity" },
   { href: "/dashboard/activities/upload", label: "Upload HTML Activity" },
   { href: "/dashboard/prompts", label: "Prompt Library" },
   { href: "/dashboard/live", label: "Live Classroom" },

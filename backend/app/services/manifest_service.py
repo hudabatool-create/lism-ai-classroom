@@ -14,6 +14,7 @@ than rejecting them.
 import html as html_lib
 import json
 import re
+from typing import NamedTuple
 
 MANIFEST_PATTERN = re.compile(
     r'<script[^>]*id=["\']lism-manifest["\'][^>]*>(.*?)</script>',
@@ -78,23 +79,90 @@ def _normalize_manifest(raw: dict) -> dict:
     }
 
 
-# Lesson sections we can recognise in an activity that carries no manifest.
-# Matched against a section's data-stage/id/class and its heading text, so a
-# deck or worksheet authored outside LISM still gets real, teacher-paced
-# stages instead of collapsing into one unnamed block.
-_STAGE_PATTERNS: list[tuple[str, str, str, tuple[str, ...]]] = [
-    # (stage id, label, type, phrases that identify it)
-    ("title", "Title", "title", ("title-slide", "cover")),
-    ("keywords", "Keywords & Objective", "keywords", ("keyword", "vocabulary")),
-    ("objectives", "Learning Objectives", "objectives", ("objective", "success criteria", "learning outcome", "i can")),
-    ("starter", "Starter", "starter", ("starter", "retrieval", "do now", "bell work", "warm up", "warm-up")),
-    ("main-teaching", "Main Teaching", "teaching", ("main teaching", "teaching", "knowledge box", "worked example", "i do", "input")),
-    ("guided-practice", "Guided Practice", "practice", ("guided practice", "we do", "practice")),
-    ("main-activity", "Main Activity", "main-activity", ("main activity", "main task", "you do", "independent")),
-    ("rubric", "Mark Scheme", "rubric", ("rubric", "mark scheme", "marking")),
-    ("connection", "Connection Link", "connection", ("uae", "cross-curricular", "cross curricular", "connection", "ai link")),
-    ("exit-ticket", "Exit Ticket", "exit-ticket", ("exit ticket", "exit-ticket", "exit")),
-    ("reflection", "Reflection", "reflection", ("reflection", "reflect", "3-2-1", "self-assessment")),
+# Sections we can recognise in an activity that carries no manifest. Matched
+# against a section's data-stage/id/class and its heading text, so an activity
+# authored outside LISM still gets real, teacher-paced stages instead of
+# collapsing into one unnamed block.
+#
+# Two kinds of pattern:
+#   * repeatable -- numbered sections a single activity has many of ("Card 3",
+#     "Question 5"). Each match becomes its own stage, numbered in document
+#     order, so an 8-card flashcard set recovers all 8 stages.
+#   * single -- named once per activity. First match wins; later ones are
+#     ignored so a stray mention doesn't create a phantom stage.
+#
+# Order matters: the numbered patterns come first because they are the most
+# specific. Without that, "Exit Question 2" would be swallowed by the Exit
+# Ticket pattern and every question after the first would disappear.
+class _StagePattern(NamedTuple):
+    id: str
+    label: str
+    type: str
+    pattern: re.Pattern[str]
+    repeatable: bool = False
+
+
+def _p(id_: str, label: str, type_: str, regex: str, repeatable: bool = False) -> _StagePattern:
+    return _StagePattern(id_, label, type_, re.compile(regex, re.IGNORECASE), repeatable)
+
+
+_STAGE_PATTERNS: list[_StagePattern] = [
+    # --- Numbered, repeating sections -------------------------------------
+    _p("exit", "Exit Question", "exit-ticket", r"\bexit[\s\-_]*(?:question|ticket)?[\s\-_]*\d+\b", True),
+    _p("q", "Question", "question", r"\b(?:question|q)[\s\-_]*\d+\b", True),
+    _p("s", "Statement", "question", r"\bstatement[\s\-_]*\d+\b", True),
+    _p("card", "Card", "card", r"\bcard[\s\-_]*\d+\b", True),
+    _p("puzzle", "Lock", "puzzle", r"\b(?:puzzle|lock|clue|riddle)[\s\-_]*\d+\b", True),
+    _p("round", "Round", "round", r"\bround[\s\-_]*\d+\b", True),
+    _p("task", "Task", "activity", r"\b(?:task|part|challenge)[\s\-_]*\d+\b", True),
+    # --- Lesson deck / worksheet framework ---------------------------------
+    # "title" only as a standalone marker/word -- so a data-stage="title" or a
+    # "Title Slide" heading counts, but class="card-title" does not.
+    _p("title", "Title", "title", r"title[\s\-_]?slide|\bcover\b|(?:^|\s)title(?:\s|$)"),
+    _p("keywords", "Keywords & Objective", "keywords", r"\bkeyword|\bvocabulary\b"),
+    _p("objectives", "Learning Objectives", "objectives", r"\bobjective|success criteria|learning outcome|\bi can\b"),
+    _p("starter", "Starter", "starter", r"\bstarter\b|\bretrieval\b|\bdo now\b|\bbell work\b|\bwarm[\s\-]?up\b|quick recall"),
+    _p("main-teaching", "Main Teaching", "teaching", r"main teaching|\bteaching\b|knowledge box|worked example|\bi do\b|\binput\b"),
+    _p("guided-practice", "Guided Practice", "practice", r"guided practice|\bwe do\b|\bpractice\b"),
+    _p("main-activity", "Main Activity", "main-activity", r"main activity|main task|\byou do\b|\bindependent\b"),
+    _p("rubric", "Mark Scheme", "rubric", r"\brubric\b|mark scheme|\bmarking\b"),
+    _p("connection", "Connection Link", "connection", r"\buae\b|cross[\s\-]?curricular|\bconnection\b|\bai link\b"),
+    _p("exit-ticket", "Exit Ticket", "exit-ticket", r"exit[\s\-]?ticket|\bexit\b"),
+    # --- Simulation / coding ------------------------------------------------
+    _p("scenario", "Scenario", "scenario", r"\bscenario\b|\bthe story\b|\bbriefing\b|\bstory\b"),
+    _p("explore", "Explore the Variables", "explore", r"\bexplore\b|\bvariables?\b|\bcontrols?\b|\bsandbox\b"),
+    _p("observation", "Observation", "observation", r"\bobservations?\b|\brecord (?:your|the) \b"),
+    _p("analysis", "Analysis", "analysis", r"\banalysis\b|\banaly[sz]e\b|\bconclusion\b"),
+    _p("problem", "The Problem", "problem", r"\bthe problem\b|problem statement|\bbrief\b"),
+    _p("predict", "Predict the Output", "predict", r"\bpredict\b"),
+    _p("debug", "Find the Bug", "debug", r"\bdebug\b|find the bug|fix the code|\bspot the error\b"),
+    _p("write", "Write Your Code", "code", r"write (?:your )?code|your solution|\bcode editor\b"),
+    _p("tests", "Test Cases", "tests", r"test cases?\b|\btest your\b"),
+    # --- Games, puzzles, interactives ---------------------------------------
+    _p("how-to-play", "How to Play", "instructions", r"how to play|\bthe rules\b|\binstructions\b"),
+    _p("results", "Results", "results", r"\bresults?\b|\bleaderboard\b|final score|\byour score\b"),
+    _p("escaped", "Escaped", "results", r"\bescaped\b|\byou\'?re out\b"),
+    _p("across", "Across Clues", "clues", r"\bacross\b"),
+    _p("down", "Down Clues", "clues", r"\bdown clues?\b"),
+    _p("sort", "Sort Them", "sort", r"\bsort\b|\bcategori[sz]e\b|\bdrag (?:them|the)\b"),
+    _p("sequence", "Put Them In Order", "sequence", r"\bsequence\b|put them in order|\bin order\b|\btimeline\b"),
+    # Deliberately not a bare "pair" -- that would swallow "Explain a Pair",
+    # which is its own stage in the matching activity.
+    _p("match", "Match the Pairs", "match", r"\bmatch(?:ing)?\b|pair them"),
+    # --- Thinking, discussion, closing --------------------------------------
+    _p("prompt", "The Big Question", "prompt", r"big question|\bbrainstorm\b|\bthe question\b"),
+    _p("ideas", "Post Your Ideas", "ideas", r"your ideas|\badd (?:an )?idea|post (?:your|an) \b"),
+    _p("group", "Group the Ideas", "group", r"group the|\bgrouping\b|\bthemes\b|\bcluster\b"),
+    _p("best", "Choose the Strongest", "evaluate", r"\bstrongest\b|best idea|\bchoose the\b|\bvote\b"),
+    _p("poll", "Class Poll", "poll", r"\bpoll\b"),
+    _p("confidence", "Confidence Check", "confidence", r"\bconfidence\b"),
+    _p("self-check", "Self Check", "self-check", r"self[\s\-]?check|\bhow did you do\b"),
+    _p("apply", "Apply It", "apply", r"\bapply it\b|\bapplication\b"),
+    _p("misconception", "Spot the Mistake", "misconception", r"\bmisconception\b|spot the mistake|what\'?s wrong"),
+    _p("justify", "Justify Your Choice", "justify", r"\bjustif"),
+    _p("explain", "Explain", "explain", r"\bexplain\b"),
+    _p("review", "Review", "review", r"\breview\b"),
+    _p("reflection", "Reflection", "reflection", r"\breflection\b|\breflect\b|3-2-1|self[\s\-]?assessment"),
 ]
 
 _SECTION_RE = re.compile(
@@ -105,11 +173,11 @@ _TAGS_RE = re.compile(r"<[^>]+>")
 _ATTR_RE = re.compile(r'(?:data-stage|id|class)\s*=\s*["\']([^"\']+)["\']', re.IGNORECASE)
 
 
-def _match_stage(*texts: str) -> tuple[str, str, str] | None:
-    haystack = " ".join(t.lower() for t in texts if t)
-    for stage_id, label, stage_type, phrases in _STAGE_PATTERNS:
-        if any(p in haystack for p in phrases):
-            return stage_id, label, stage_type
+def _match_stage(*texts: str) -> _StagePattern | None:
+    haystack = " ".join(t for t in texts if t)
+    for entry in _STAGE_PATTERNS:
+        if entry.pattern.search(haystack):
+            return entry
     return None
 
 
@@ -123,34 +191,54 @@ def infer_stages_from_html(html: str) -> list[dict]:
     sections restores all of that without the teacher regenerating anything.
 
     Conservative on purpose: only sections whose marker or heading clearly
-    names a known lesson stage count, each stage is taken once, and document
-    order is preserved. Returns [] when nothing recognisable is found, so the
-    caller keeps the honest single-stage fallback.
+    name a known stage count, named stages are taken once, and document order
+    is preserved. Returns [] when nothing recognisable is found, so the caller
+    keeps the honest single-stage fallback.
     """
     found: list[dict] = []
-    seen: set[str] = set()
+    seen_single: set[str] = set()
+    counters: dict[str, int] = {}
+    seen_signatures: set[str] = set()
 
     for _tag, attrs, inner in _SECTION_RE.findall(html):
         markers = " ".join(_ATTR_RE.findall(attrs))
         heading_html = _HEADING_RE.search(inner)
         heading = _TAGS_RE.sub(" ", heading_html.group(1)) if heading_html else ""
-        match = _match_stage(markers, heading)
-        if not match:
+        entry = _match_stage(markers, heading)
+        if not entry:
             continue
-        stage_id, label, stage_type = match
-        if stage_id in seen:
-            continue
-        seen.add(stage_id)
+
         # Prefer the activity's own heading -- "Starter / Retrieval" is more
         # useful to the teacher than our generic label.
         # Unescape so a heading reads "Keywords & Objective" on the teacher's
         # stage list, not "Keywords &amp; Objective".
         clean_heading = " ".join(html_lib.unescape(heading).split())[:60]
+
+        if entry.repeatable:
+            # Nested markup can surface the same block twice (an outer section
+            # and the inner div that carries the marker). Two genuinely
+            # different cards never share a heading and marker set, so
+            # collapsing on that keeps "Card 3" from becoming two stages.
+            signature = f"{entry.id}|{clean_heading.lower()}|{markers.lower()}"
+            if signature in seen_signatures:
+                continue
+            seen_signatures.add(signature)
+            counters[entry.id] = counters.get(entry.id, 0) + 1
+            number = counters[entry.id]
+            stage_id = f"{entry.id}-{number}"
+            label = clean_heading or f"{entry.label} {number}"
+        else:
+            if entry.id in seen_single:
+                continue
+            seen_single.add(entry.id)
+            stage_id = entry.id
+            label = clean_heading or entry.label
+
         found.append(
             {
                 "id": stage_id,
-                "label": clean_heading or label,
-                "type": stage_type,
+                "label": label,
+                "type": entry.type,
                 "durationSeconds": 300,
                 "sequentialLock": True,
                 "marks": 10 if stage_id == "main-activity" else None,
