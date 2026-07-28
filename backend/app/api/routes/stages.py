@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.api.deps import get_current_teacher
-from app.services.data_store import store
+from app.services.data_store import astore, store
 from app.services.status_service import broadcast_status_update
 from app.services.websocket_manager import manager
 
@@ -27,13 +27,13 @@ class ExtendRequest(BaseModel):
 @router.post("/{session_id}/stage/start")
 async def start_stage(session_id: str, teacher: dict = Depends(get_current_teacher)):
     session = _get_owned_session(session_id, teacher)
-    activity = store.get_activity(session["activity_id"])
+    activity = await astore.get_activity(session["activity_id"])
     stages = activity["manifest"]["stages"]
     next_index = session["current_stage_index"] + 1
     if next_index >= len(stages):
         raise HTTPException(status_code=400, detail="This is already the last stage")
     stage = stages[next_index]
-    updated = store.start_stage(session_id, next_index, stage["durationSeconds"])
+    updated = await astore.start_stage(session_id, next_index, stage["durationSeconds"])
     await manager.broadcast(
         session["code"],
         {
@@ -53,9 +53,9 @@ async def end_stage(session_id: str, teacher: dict = Depends(get_current_teacher
     session = _get_owned_session(session_id, teacher)
     if session["current_stage_index"] < 0:
         raise HTTPException(status_code=400, detail="No stage is running")
-    updated = store.end_stage(session_id)
+    updated = await astore.end_stage(session_id)
     await manager.broadcast(session["code"], {"type": "stage_ended", "stageIndex": updated["current_stage_index"]})
-    activity = store.get_activity(updated["activity_id"])
+    activity = await astore.get_activity(updated["activity_id"])
     await broadcast_status_update(updated, activity)
     return updated
 
@@ -65,7 +65,7 @@ async def pause_stage(session_id: str, teacher: dict = Depends(get_current_teach
     session = _get_owned_session(session_id, teacher)
     if session["stage_status"] != "running":
         raise HTTPException(status_code=400, detail="No stage is running")
-    updated = store.pause_stage(session_id)
+    updated = await astore.pause_stage(session_id)
     # Students need this too: their page relays it into the activity as a
     # lism:command pause, which freezes inputs without losing typed work.
     await manager.broadcast(
@@ -76,7 +76,7 @@ async def pause_stage(session_id: str, teacher: dict = Depends(get_current_teach
             "remainingSeconds": updated["stage_duration_seconds"],
         },
     )
-    activity = store.get_activity(updated["activity_id"])
+    activity = await astore.get_activity(updated["activity_id"])
     await broadcast_status_update(updated, activity)
     return updated
 
@@ -86,7 +86,7 @@ async def resume_stage(session_id: str, teacher: dict = Depends(get_current_teac
     session = _get_owned_session(session_id, teacher)
     if session["stage_status"] != "paused":
         raise HTTPException(status_code=400, detail="This stage is not paused")
-    updated = store.resume_stage(session_id)
+    updated = await astore.resume_stage(session_id)
     await manager.broadcast(
         session["code"],
         {
@@ -96,7 +96,7 @@ async def resume_stage(session_id: str, teacher: dict = Depends(get_current_teac
             "startedAt": updated["stage_started_at"],
         },
     )
-    activity = store.get_activity(updated["activity_id"])
+    activity = await astore.get_activity(updated["activity_id"])
     await broadcast_status_update(updated, activity)
     return updated
 
@@ -106,7 +106,7 @@ async def extend_stage(session_id: str, payload: ExtendRequest, teacher: dict = 
     session = _get_owned_session(session_id, teacher)
     if session["current_stage_index"] < 0:
         raise HTTPException(status_code=400, detail="No stage is running")
-    updated = store.extend_stage(session_id, payload.additional_seconds)
+    updated = await astore.extend_stage(session_id, payload.additional_seconds)
     await manager.broadcast(
         session["code"],
         {"type": "timer_extended", "durationSeconds": updated["stage_duration_seconds"]},

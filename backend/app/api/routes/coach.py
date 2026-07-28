@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from app.api.routes.sessions import active_session_for_student
 from app.services import ai_coach_service
-from app.services.data_store import store
+from app.services.data_store import astore, store
 from app.services.status_service import broadcast_status_update
 from app.services.websocket_manager import manager
 
@@ -30,7 +30,7 @@ class CoachRequest(BaseModel):
 async def ask_coach(code: str, payload: CoachRequest):
     session = active_session_for_student(code, payload.student_id)
 
-    activity = store.get_activity(session["activity_id"])
+    activity = await astore.get_activity(session["activity_id"])
     manifest = activity["manifest"]
     current_stage = None
     if 0 <= session["current_stage_index"] < len(manifest["stages"]):
@@ -39,10 +39,10 @@ async def ask_coach(code: str, payload: CoachRequest):
     history = [turn.model_dump() for turn in payload.history]
     reply = ai_coach_service.coach_reply(manifest, current_stage, history, payload.message)
 
-    count = store.increment_coach_messages(payload.student_id)
+    count = await astore.increment_coach_messages(payload.student_id)
 
     if count == COACH_ESCALATION_THRESHOLD:
-        store.set_needs_help(payload.student_id, True)
+        await astore.set_needs_help(payload.student_id, True)
         await manager.broadcast(
             session["code"],
             {"type": "coach_escalated", "student_id": payload.student_id, "message_count": count},

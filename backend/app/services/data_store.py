@@ -22,6 +22,7 @@ from threading import Lock
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
+from starlette.concurrency import run_in_threadpool
 
 from app.db.base import SessionLocal
 from app.db.models import (
@@ -831,3 +832,32 @@ class DataStore:
 
 
 store = DataStore()
+
+
+class _AsyncStore:
+    """`store`, safe to call from an `async def` endpoint.
+
+    Every method here does blocking database I/O. Calling one directly inside
+    an `async def` handler stops the event loop for the whole round trip --
+    which means one student pressing Join freezes every other request on the
+    server, across every class and every teacher. A sync `def` endpoint is
+    fine (FastAPI already runs those in a threadpool); an `async def` one is
+    not, and the routes that broadcast over WebSocket have to be async.
+
+    This ran the server at one request at a time in production: 32 students
+    joining took 90 seconds and most timed out.
+
+    Usage inside an async endpoint:  session = await astore.get_session(id)
+    """
+
+    def __getattr__(self, name: str):
+        method = getattr(store, name)
+
+        async def in_threadpool(*args, **kwargs):
+            return await run_in_threadpool(method, *args, **kwargs)
+
+        in_threadpool.__name__ = f"async_{name}"
+        return in_threadpool
+
+
+astore = _AsyncStore()

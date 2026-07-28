@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from app.api.deps import get_current_teacher
 from app.services.ai_service import generate_activity_html
-from app.services.data_store import store
+from app.services.data_store import astore, store
 from app.services.manifest_service import extract_manifest
 from app.services.zip_service import extract_zip_activity
 
@@ -49,7 +49,7 @@ async def upload_activity(
         raise HTTPException(status_code=400, detail="Only .html, .htm, or .zip files are supported")
 
     manifest = extract_manifest(html, fallback_title=title)
-    activity = store.create_activity(
+    activity = await astore.create_activity(
         teacher_id=teacher["id"],
         title=title,
         subject=subject,

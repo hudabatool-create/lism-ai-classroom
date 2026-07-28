@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from app.api.deps import get_current_teacher
 from app.core.config import settings
 from app.core.security import decode_access_token
-from app.services.data_store import store
+from app.services.data_store import astore, store
 from app.services.scoring import score_student
 from app.services.status_service import broadcast_status_update, compute_student_statuses, summarize_statuses
 from app.services.student_report_service import build_student_report
@@ -196,14 +196,14 @@ async def update_session_settings(
     """Teacher toggles copy-paste protection / focus monitoring mid-lesson.
     Broadcast to everyone so student pages re-send set_config into their
     activity iframe without needing a reload."""
-    session = store.get_session(session_id)
+    session = await astore.get_session(session_id)
     if not session or session["teacher_id"] != teacher["id"]:
         raise HTTPException(status_code=404, detail="Session not found")
     if payload.max_warnings is not None and not 1 <= payload.max_warnings <= 10:
         raise HTTPException(status_code=400, detail="Maximum warnings must be between 1 and 10")
     if payload.timer_sound is not None and payload.timer_sound not in TIMER_SOUNDS:
         raise HTTPException(status_code=400, detail=f"Timer sound must be one of: {', '.join(TIMER_SOUNDS)}")
-    updated = store.update_session_settings(
+    updated = await astore.update_session_settings(
         session_id,
         copy_paste_protection=payload.copy_paste_protection,
         focus_monitoring=payload.focus_monitoring,
@@ -225,10 +225,10 @@ async def update_session_settings(
 
 @router.post("/sessions/{session_id}/end")
 async def end_session(session_id: str, teacher: dict = Depends(get_current_teacher)):
-    session = store.get_session(session_id)
+    session = await astore.get_session(session_id)
     if not session or session["teacher_id"] != teacher["id"]:
         raise HTTPException(status_code=404, detail="Session not found")
-    ended = store.end_session(session_id)
+    ended = await astore.end_session(session_id)
     # Students were previously told nothing when the lesson ended -- they just
     # sat on a frozen activity. This is what triggers their report.
     await manager.broadcast(ended["code"], {"type": "session_ended"})
@@ -269,23 +269,23 @@ def get_session_by_code(code: str):
 
 @router.post("/join/{code}")
 async def join_session(code: str, payload: JoinRequest):
-    session = store.get_session_by_code(code.upper())
+    session = await astore.get_session_by_code(code.upper())
     if not session:
         raise HTTPException(status_code=404, detail="Session not found. Check the code and try again.")
     if session["status"] != "active":
         raise HTTPException(status_code=400, detail="This session has ended")
-    student, rejoined = store.add_student_to_session(session["id"], payload.name, payload.grade, payload.section)
+    student, rejoined = await astore.add_student_to_session(session["id"], payload.name, payload.grade, payload.section)
     # Only announce genuinely new participants -- a reconnecting student is
     # already on the teacher's list and shouldn't appear to join twice.
     if not rejoined:
         await manager.broadcast(session["code"], {"type": "student_joined", "student": student}, roles=("teacher",))
-    activity = store.get_activity(session["activity_id"])
+    activity = await astore.get_activity(session["activity_id"])
     await broadcast_status_update(session, activity)
     return {
         "student": student,
         "session": session,
         "rejoined": rejoined,
-        "responses": store.list_student_responses(session["id"], student["id"]),
+        "responses": await astore.list_student_responses(session["id"], student["id"]),
     }
 
 
@@ -340,9 +340,9 @@ def active_session_for_student(code: str, student_id: str) -> dict:
 @router.post("/join/{code}/response")
 async def submit_response(code: str, payload: ResponseRequest):
     session = active_session_for_student(code, payload.student_id)
-    if store.is_locked(session["id"], payload.student_id):
+    if await astore.is_locked(session["id"], payload.student_id):
         raise HTTPException(status_code=403, detail="This activity is locked due to focus violations")
-    activity = store.get_activity(session["activity_id"])
+    activity = await astore.get_activity(session["activity_id"])
     stage_id = payload.stage_id
     if not stage_id:
         stages = activity["manifest"]["stages"]
@@ -364,10 +364,10 @@ async def submit_response(code: str, payload: ResponseRequest):
             detail=f"Your teacher hasn't started \"{label}\" yet. Your answer was not saved — wait for this section to begin.",
         )
 
-    if store.has_response_for_stage(session["id"], payload.student_id, stage_id):
+    if await astore.has_response_for_stage(session["id"], payload.student_id, stage_id):
         raise HTTPException(status_code=409, detail="You've already submitted an answer for this part of the lesson")
-    response = store.add_response(session["id"], payload.student_id, stage_id, payload.correct, payload.answer, payload.mark)
-    store.set_needs_help(payload.student_id, False)
+    response = await astore.add_response(session["id"], payload.student_id, stage_id, payload.correct, payload.answer, payload.mark)
+    await astore.set_needs_help(payload.student_id, False)
     await manager.broadcast(session["code"], {"type": "response_submitted", "response": response}, roles=("teacher",))
     await broadcast_status_update(session, activity)
     return response
@@ -381,12 +381,12 @@ class FocusViolationRequest(BaseModel):
 @router.post("/join/{code}/focus-violation")
 async def report_focus_violation(code: str, payload: FocusViolationRequest):
     session = active_session_for_student(code, payload.student_id)
-    violation = store.add_focus_violation(session["id"], payload.student_id, payload.type)
+    violation = await astore.add_focus_violation(session["id"], payload.student_id, payload.type)
     locked = violation["violation_number"] >= 3
     await manager.broadcast(
         session["code"], {"type": "focus_violation", "violation": violation, "locked": locked}, roles=("teacher",)
     )
-    activity = store.get_activity(session["activity_id"])
+    activity = await astore.get_activity(session["activity_id"])
     await broadcast_status_update(session, activity)
     return {"violation_number": violation["violation_number"], "locked": locked}
 
@@ -398,9 +398,9 @@ class NeedHelpRequest(BaseModel):
 @router.post("/join/{code}/need-help")
 async def request_help(code: str, payload: NeedHelpRequest):
     session = active_session_for_student(code, payload.student_id)
-    student = store.set_needs_help(payload.student_id, True)
+    student = await astore.set_needs_help(payload.student_id, True)
     await manager.broadcast(session["code"], {"type": "need_help_requested", "student": student}, roles=("teacher",))
-    activity = store.get_activity(session["activity_id"])
+    activity = await astore.get_activity(session["activity_id"])
     await broadcast_status_update(session, activity)
     return {"help_requests": student["help_requests"]}
 
@@ -412,7 +412,7 @@ async def session_ws(
     student_id: str | None = Query(default=None),
 ):
     code = code.upper()
-    session = store.get_session_by_code(code)
+    session = await astore.get_session_by_code(code)
     role = "student" if student_id else "teacher"
 
     if role == "teacher":
@@ -425,7 +425,7 @@ async def session_ws(
         # a query param anymore).
         token = websocket.cookies.get(settings.jwt_cookie_name)
         auth_payload = decode_access_token(token) if token else None
-        teacher = store.get_teacher(auth_payload["sub"]) if auth_payload else None
+        teacher = await astore.get_teacher(auth_payload["sub"]) if auth_payload else None
         if not session or not teacher or teacher["id"] != session["teacher_id"]:
             await websocket.close(code=4401)
             return
@@ -434,7 +434,7 @@ async def session_ws(
     if role == "student":
         await manager.broadcast(code, {"type": "student_online", "student_id": student_id}, roles=("teacher",))
     if session:
-        activity = store.get_activity(session["activity_id"])
+        activity = await astore.get_activity(session["activity_id"])
         await broadcast_status_update(session, activity)
     try:
         while True:
@@ -446,5 +446,5 @@ async def session_ws(
         if role == "student":
             await manager.broadcast(code, {"type": "student_offline", "student_id": student_id}, roles=("teacher",))
         if session:
-            activity = store.get_activity(session["activity_id"])
+            activity = await astore.get_activity(session["activity_id"])
             await broadcast_status_update(session, activity)
