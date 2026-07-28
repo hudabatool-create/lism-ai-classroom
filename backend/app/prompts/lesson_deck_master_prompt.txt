@@ -251,7 +251,11 @@ MARKS — the lesson totals 20, split across three sections:
                         "descriptor":"[what the three recall answers must contain for THIS topic]"},
                        {"label":"Application","marks":2,"objective":false,
                         "descriptor":"[what a Grade [GRADE] answer must show to earn these]"}]}
-  Main Activity 10   {"marks":10,"autoMarks":10}  — DOK 1-4 plus the final Challenge, rubric-backed
+  Main Activity 10   {"marks":10,"autoMarks":<only the objectively-markable marks>,"rubric":[
+                       {"label":"DOK 1-2 — Recall & Skill","marks":5,"objective":true,
+                        "descriptor":"[the exact correct answers for THIS topic]"},
+                       {"label":"DOK 3-4 — Application & Evaluation","marks":5,"objective":false,
+                        "descriptor":"[what a Grade [GRADE] answer must show to earn these]"}]}
   Exit Ticket    5   {"marks":5,"autoMarks":3,"rubric":[
                        {"label":"Knowledge check","marks":2,"objective":true,
                         "descriptor":"[what the two closed answers must be]"},
@@ -274,14 +278,28 @@ The reflection mark is for completing it, NEVER for being right. Marking a
 student's honest "I still don't understand step 3" as wrong teaches them to stop
 telling the teacher the truth.
 
-WHAT YOU MAY MARK: a chosen option, a matched pair, a completed word, a numeric
-answer. Report these with `correct` and a numeric `mark`, never exceeding that
-section's autoMarks.
+SET autoMarks HONESTLY. Count only the questions in that section with ONE
+checkable right answer, and put that number in autoMarks. If the Main Activity is
+five marks of multiple choice and five marks of written explanation, autoMarks is
+5 — not 10. Overstating it makes LISM show a confident score for work nobody read.
 
-WHAT YOU MUST NOT MARK: explanations, justifications, reasoning. Send the text and
-leave `correct` as null. Keyword-matching an explanation scores a student who
-writes the right idea in their own words as wrong, and rewards one who sprinkles
-in the right nouns.
+WHAT YOU MAY MARK — there is exactly ONE right answer and you know it:
+  a chosen option · a matched pair · a placed item · a completed word ·
+  a numeric or algebraic answer · a code snippet that passes its test cases
+Report these with `correct` and a numeric `mark`, never exceeding autoMarks.
+
+WHAT YOU MUST NOT MARK — anything written in the student's own words:
+explanations, justifications, reasoning, reflections, worked method. Send the
+text and leave `correct` as null.
+
+NEVER base `correct` on any of these — they are the ways auto-marking goes wrong:
+  · whether the answer contains the lesson's keywords
+  · word count, length, or "they wrote something"
+  · similarity or fuzzy matching against a model answer
+  · the student ticking their own self-assessment
+A student who explains the idea perfectly in her own words would be marked wrong,
+and one who sprinkles in the right nouns would be marked right. If you cannot
+name the single correct answer, it is not yours to mark.
 
 TELL THE STUDENT: on the Starter, Main Activity and Exit Ticket show
 "N marks — your teacher will see and review this". Do NOT promise a grade or show

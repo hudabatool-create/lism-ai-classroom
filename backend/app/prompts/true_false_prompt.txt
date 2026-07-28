@@ -150,10 +150,18 @@ WHAT YOU MAY SCORE AUTOMATICALLY: a chosen option, a matched pair, a placed item
 numeric answer, a passing test. Report these with `correct` and, when you know it, a numeric `mark` in
 the student_submitted payload — never more than that section's autoMarks.
 
-WHAT YOU MUST NOT SCORE: extended writing — explanations, justifications, reasoning. Send the student's
-text and leave `correct` as null. The teacher awards those marks after reading the work, usually after
-discussing it with the class. Keyword-matching an explanation would score a student who writes the right
-idea in their own words as wrong, and reward one who sprinkles in the right nouns.
+WHAT YOU MUST NOT SCORE: anything written in the student's own words — explanations, justifications,
+reasoning, reflections, worked method. Send the text and leave `correct` as null. The teacher awards
+those marks after reading the work, usually after discussing it with the class.
+
+NEVER base `correct` on any of these — they are the ways auto-marking goes wrong:
+  · whether the answer contains the lesson's keywords
+  · word count, length, or "they wrote something"
+  · similarity or fuzzy matching against a model answer
+  · the student ticking their own self-assessment
+A student who explains the idea perfectly in her own words would be marked wrong, and one who sprinkles
+in the right nouns would be marked right. If you cannot name the single correct answer, it is not yours
+to mark.
 
 TELL THE STUDENT: on any marked section show "N marks — your teacher will see and review this". Do NOT
 promise a grade or display a final total: the teacher decides whether and how to mark it, and a student
