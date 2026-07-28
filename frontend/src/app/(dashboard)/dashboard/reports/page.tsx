@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api, downloadFile } from "@/lib/api";
 import type { Activity, SessionInfo } from "@/lib/types";
@@ -35,7 +36,9 @@ export default function ReportsPage() {
     <div>
       <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Reports</h1>
       <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-        Export responses, completion data, and the Focus Report for any session.
+        Mark the answers LISM can&apos;t score itself, then export responses, marks and the Focus Report. The Excel
+        file&apos;s Marks sheet is the one to transfer to your gradebook &mdash; a blank cell there means not yet
+        marked, never zero.
       </p>
 
       {loading ? (
@@ -67,6 +70,12 @@ export default function ReportsPage() {
                   <td className="px-4 py-3">{new Date(s.created_at).toLocaleString()}</td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex justify-end gap-2">
+                      <Link
+                        href={`/dashboard/reports/${s.id}/marks`}
+                        className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
+                      >
+                        Mark
+                      </Link>
                       <button
                         onClick={() => handleDownload(s.id, s.code, "pdf")}
                         disabled={downloading === `${s.id}-pdf`}

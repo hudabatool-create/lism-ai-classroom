@@ -9,6 +9,7 @@ from app.api.deps import get_current_teacher
 from app.core.config import settings
 from app.core.security import decode_access_token
 from app.services.data_store import store
+from app.services.scoring import score_student
 from app.services.status_service import broadcast_status_update, compute_student_statuses, summarize_statuses
 from app.services.student_report_service import build_student_report
 from app.services.websocket_manager import manager
@@ -71,6 +72,99 @@ def get_session(session_id: str, teacher: dict = Depends(get_current_teacher)):
         "status_summary": summarize_statuses(statuses),
         "focus_violations": focus_violations,
     }
+
+
+@router.get("/sessions/{session_id}/marks")
+def session_marks(session_id: str, teacher: dict = Depends(get_current_teacher)):
+    """Everything the marking panel needs, in one round trip.
+
+    One entry per student with their per-stage breakdown, so the teacher sees
+    the answer, what the activity already scored, and what they still owe --
+    without the page having to stitch responses to stages itself.
+    """
+    session = store.get_session(session_id)
+    if not session or session["teacher_id"] != teacher["id"]:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    activity = store.get_activity(session["activity_id"])
+    stages = activity["manifest"]["stages"] if activity else []
+    responses = store.list_responses(session_id)
+    by_student: dict[str, list[dict]] = {}
+    for r in responses:
+        by_student.setdefault(r["student_id"], []).append(r)
+
+    students = []
+    for student in store.list_students(session_id):
+        score = score_student(stages, by_student.get(student["id"], []))
+        students.append({
+            "student_id": student["id"],
+            "name": student["name"],
+            "grade": student.get("grade", ""),
+            "section": student.get("section", ""),
+            **score,
+        })
+
+    marked_stages = [
+        {"id": s["id"], "label": s["label"], "marks": s["marks"],
+         "auto_marks": s.get("autoMarks"), "teacher_marks": s.get("teacherMarks"),
+         "rubric": s.get("rubric") or []}
+        for s in stages if s.get("marks")
+    ]
+    return {
+        "activity_title": activity["title"] if activity else "",
+        "session_code": session["code"],
+        "total_marks": sum(s["marks"] for s in marked_stages) or None,
+        "stages": marked_stages,
+        "students": students,
+        "awaiting_review": sum(1 for s in students if not s["fully_graded"]),
+    }
+
+
+class GradeRequest(BaseModel):
+    student_id: str
+    stage_id: str
+    # None clears the mark back to ungraded. Bare `float | None` with no
+    # default would still require the key, which is what we want: an omitted
+    # mark is almost always a bug, an explicit null is a deliberate undo.
+    mark: float | None
+    feedback: str | None = None
+
+
+@router.post("/sessions/{session_id}/grade")
+def grade_response(session_id: str, payload: GradeRequest, teacher: dict = Depends(get_current_teacher)):
+    """Record the teacher's own mark for a stage the activity can't score.
+
+    Deliberately teacher-only and session-scoped: this is the number that
+    reaches the gradebook, so it can't be settable from a student's device.
+    """
+    session = store.get_session(session_id)
+    if not session or session["teacher_id"] != teacher["id"]:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    activity = store.get_activity(session["activity_id"])
+    stages = activity["manifest"]["stages"] if activity else []
+    stage = next((s for s in stages if s["id"] == payload.stage_id), None)
+    if stage is None:
+        raise HTTPException(status_code=404, detail="That stage isn't part of this activity")
+
+    if payload.mark is not None:
+        if payload.mark < 0:
+            raise HTTPException(status_code=400, detail="A mark can't be negative")
+        # Bounded by what the stage is actually worth, so a slip of the
+        # keyboard can't put 50 into a stage worth 5.
+        ceiling = stage.get("marks")
+        if ceiling is not None and payload.mark > ceiling:
+            raise HTTPException(
+                status_code=400,
+                detail=f'"{stage["label"]}" is out of {ceiling:g} marks',
+            )
+
+    graded = store.set_teacher_mark(
+        session_id, payload.student_id, payload.stage_id, payload.mark, payload.feedback
+    )
+    if graded is None:
+        raise HTTPException(status_code=404, detail="That student hasn't answered this stage")
+    return graded
 
 
 @router.get("/sessions/{session_id}/qrcode.png")

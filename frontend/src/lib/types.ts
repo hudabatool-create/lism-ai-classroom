@@ -24,7 +24,12 @@ export interface Stage {
   type: string;
   durationSeconds: number;
   sequentialLock: boolean;
-  marks?: unknown;
+  /** Total the stage is worth. null when it is deliberately unmarked. */
+  marks: number | null;
+  /** The portion the activity can score itself; the rest is the teacher's. */
+  autoMarks: number | null;
+  teacherMarks: number | null;
+  rubric: RubricCriterion[];
 }
 
 export interface LessonManifest {
@@ -164,4 +169,60 @@ export interface Insights {
   misconceptions: string[];
   recommendations: string[];
   student_notes: { name: string; note: string }[];
+}
+
+/** One stage's marks for one student, as computed by the backend's scoring module. */
+export interface StageScore {
+  stage_id: string;
+  label: string;
+  marks: number | null;
+  auto_marks: number | null;
+  teacher_marks: number | null;
+  answered: boolean;
+  answer: string;
+  correct: boolean | null;
+  auto_awarded: number | null;
+  teacher_awarded: number | null;
+  teacher_feedback: string | null;
+  awarded: number | null;
+  pending: number;
+  status: "unmarked" | "not_answered" | "auto_graded" | "pending_review" | "teacher_graded";
+}
+
+export interface StudentMarks {
+  student_id: string;
+  name: string;
+  grade: string;
+  section: string;
+  stages: StageScore[];
+  max_score: number | null;
+  auto_scored: number | null;
+  teacher_scored: number | null;
+  awarded_total: number | null;
+  pending_review: number | null;
+  not_attempted: number | null;
+  fully_graded: boolean;
+}
+
+export interface RubricCriterion {
+  label: string;
+  marks: number;
+  descriptor: string;
+  objective: boolean;
+}
+
+export interface SessionMarks {
+  activity_title: string;
+  session_code: string;
+  total_marks: number | null;
+  stages: {
+    id: string;
+    label: string;
+    marks: number;
+    auto_marks: number | null;
+    teacher_marks: number | null;
+    rubric: RubricCriterion[];
+  }[];
+  students: StudentMarks[];
+  awaiting_review: number;
 }

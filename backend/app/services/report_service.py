@@ -8,12 +8,55 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+from app.services.scoring import score_student
+
 HEADER_FILL = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
 HEADER_FONT = Font(color="FFFFFF", bold=True)
 
 
 def _stage_labels(activity: dict) -> dict[str, str]:
     return {s["id"]: s["label"] for s in activity["manifest"]["stages"]}
+
+
+def build_gradebook(activity: dict, students: list[dict], responses: list[dict]) -> dict:
+    """One row per student, one column per marked stage, plus totals.
+
+    This is the sheet a teacher actually transfers to Schoology, so its rules
+    matter: an ungraded stage is left **blank**, never 0. A blank says "not
+    marked"; a 0 says "this student earned nothing", and a spreadsheet can't
+    tell the reader which one you meant after the fact.
+    """
+    stages = activity["manifest"]["stages"]
+    marked_stages = [s for s in stages if s.get("marks")]
+    by_student: dict[str, list[dict]] = {}
+    for r in responses:
+        by_student.setdefault(r["student_id"], []).append(r)
+
+    headers = ["Student", "Grade", "Section"]
+    for s in marked_stages:
+        headers.append(f"{s['label']} /{s['marks']:g}")
+    headers += ["Total Awarded", "Out Of", "Pending Review", "Fully Graded"]
+
+    rows = []
+    for student in students:
+        score = score_student(stages, by_student.get(student["id"], []))
+        by_stage = {b["stage_id"]: b for b in score["stages"]}
+        row = [student["name"], student.get("grade", ""), student.get("section", "")]
+        for s in marked_stages:
+            b = by_stage.get(s["id"], {})
+            # Blank for anything nobody has marked yet, including stages the
+            # student never reached -- whether that becomes a zero is the
+            # teacher's decision, not ours.
+            row.append(b.get("awarded") if b.get("status") != "not_answered" else None)
+        row += [
+            score["awarded_total"],
+            score["max_score"],
+            score["pending_review"] or None,
+            "Yes" if score["fully_graded"] else "No",
+        ]
+        rows.append(row)
+
+    return {"headers": headers, "rows": rows, "marked_stages": marked_stages}
 
 
 def _summary_stats(students: list[dict], responses: list[dict]) -> dict:
@@ -36,7 +79,10 @@ def build_csv(session: dict, activity: dict, students: list[dict], responses: li
     stage_labels = _stage_labels(activity)
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["Student Name", "Grade", "Section", "Stage", "Submitted At", "Correct", "Answer"])
+    writer.writerow([
+        "Student Name", "Grade", "Section", "Stage", "Submitted At", "Correct",
+        "Answer", "Auto Mark", "Teacher Mark",
+    ])
     for r in responses:
         student = students_by_id.get(r["student_id"], {})
         writer.writerow([
@@ -47,6 +93,9 @@ def build_csv(session: dict, activity: dict, students: list[dict], responses: li
             r["submitted_at"],
             r.get("correct", ""),
             r.get("answer", ""),
+            # "" not 0 for an unmarked response, matching the Marks sheet.
+            "" if r.get("mark") is None else r["mark"],
+            "" if r.get("teacher_mark") is None else r["teacher_mark"],
         ])
     return output.getvalue()
 
@@ -72,6 +121,28 @@ def build_pdf(
         Paragraph(f"Students joined: {len(students)} | Responses: {len(responses)}", styles["Normal"]),
         Spacer(1, 16),
     ]
+
+    gradebook = build_gradebook(activity, students, responses)
+    if gradebook["marked_stages"]:
+        elements.append(Paragraph("Marks", styles["Heading2"]))
+        marks_data = [gradebook["headers"]]
+        for row in gradebook["rows"]:
+            marks_data.append(["" if c is None else (f"{c:g}" if isinstance(c, (int, float)) else str(c)) for c in row])
+        marks_table = Table(marks_data, repeatRows=1)
+        marks_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0e7490")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#ecfeff")]),
+        ]))
+        elements.append(marks_table)
+        elements.append(Paragraph(
+            "A blank mark means not yet reviewed, not zero.",
+            styles["Italic"],
+        ))
+        elements.append(Spacer(1, 20))
+        elements.append(Paragraph("Responses", styles["Heading2"]))
 
     data = [["Student", "Grade", "Stage", "Correct", "Answer"]]
     for r in responses:
@@ -162,9 +233,30 @@ def build_excel(
     for cell in summary["A"]:
         cell.font = Font(bold=True)
 
+    # --- Marks ---
+    # First sheet after Summary because it is the one that gets transferred to
+    # the school gradebook; everything else is evidence behind it.
+    gradebook = build_gradebook(activity, students, responses)
+    if gradebook["marked_stages"]:
+        marks_sheet = wb.create_sheet("Marks")
+        marks_sheet.append(gradebook["headers"])
+        for row in gradebook["rows"]:
+            marks_sheet.append(row)
+        _style_header_row(marks_sheet, len(gradebook["headers"]))
+        marks_sheet.column_dimensions["A"].width = 24
+        if any(r[-1] == "No" for r in gradebook["rows"]):
+            marks_sheet.append([])
+            marks_sheet.append([
+                "Blank cells are not yet marked, not zero. "
+                "Rows showing Fully Graded = No still need your review."
+            ])
+
     # --- Responses ---
     resp_sheet = wb.create_sheet("Responses")
-    headers = ["Student", "Grade", "Section", "Stage", "Correct", "Answer", "Mark", "Submitted At"]
+    headers = [
+        "Student", "Grade", "Section", "Stage", "Correct", "Answer",
+        "Auto Mark", "Teacher Mark", "Graded At", "Submitted At",
+    ]
     resp_sheet.append(headers)
     students_by_id = {s["id"]: s for s in students}
     for r in responses:
@@ -177,6 +269,8 @@ def build_excel(
             r.get("correct"),
             r.get("answer", ""),
             r.get("mark"),
+            r.get("teacher_mark"),
+            r.get("graded_at", ""),
             r["submitted_at"],
         ])
     _style_header_row(resp_sheet, len(headers))

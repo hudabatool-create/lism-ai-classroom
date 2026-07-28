@@ -237,12 +237,58 @@ Return ONLY the raw HTML, no markdown fences.
 STAGE LIST — the manifest's `stages` array must contain ONE ENTRY PER SECTION of
 this lesson, in the order they appear, using this shape:
   {"id":"starter","label":"Starter","type":"starter","durationSeconds":300,"sequentialLock":true,"marks":null}
-Use the recommended duration from this prompt for durationSeconds, and set
-"marks": 10 on the Main Activity / Main Task stage only. Give every section in
-the HTML a matching data-stage="<id>" attribute. Suggested ids, in order:
+Use the recommended duration from this prompt for durationSeconds. Give every
+section in the HTML a matching data-stage="<id>" attribute. Suggested ids, in
+order:
   title, keywords, starter, objectives, main-teaching, guided-practice,
   main-activity, rubric, connection, exit-ticket, reflection
 (Use only the sections this lesson actually has.)
+
+MARKS — the lesson totals 20, split across three sections:
+
+  Starter        5   {"marks":5,"autoMarks":3,"rubric":[
+                       {"label":"Retrieval","marks":3,"objective":true,
+                        "descriptor":"[what the three recall answers must contain for THIS topic]"},
+                       {"label":"Application","marks":2,"objective":false,
+                        "descriptor":"[what a Grade [GRADE] answer must show to earn these]"}]}
+  Main Activity 10   {"marks":10,"autoMarks":10}  — DOK 1-4 plus the final Challenge, rubric-backed
+  Exit Ticket    5   {"marks":5,"autoMarks":3,"rubric":[
+                       {"label":"Knowledge check","marks":2,"objective":true,
+                        "descriptor":"[what the two closed answers must be]"},
+                       {"label":"Explanation","marks":2,"objective":false,
+                        "descriptor":"[what a correct explanation of THIS content must contain]"},
+                       {"label":"Reflection completed","marks":1,"objective":true,
+                        "descriptor":"awarded for completing the reflection, never for its content"}]}
+
+Every other section carries "marks": null. 20 is deliberate — a teacher converts
+it to a percentage instantly, and each section's weight matches the time it gets.
+
+STRUCTURE THIS SO THE MARKS WORK:
+  Starter     — 3 closed retrieval items (1 mark each, you mark these) plus ONE
+                application or misconception item worth 2 that the teacher marks.
+  Exit Ticket — 2 closed knowledge checks (1 each, you mark these), ONE explanation
+                worth 2 that the teacher marks, and a reflection worth 1 awarded
+                simply for completing it.
+
+The reflection mark is for completing it, NEVER for being right. Marking a
+student's honest "I still don't understand step 3" as wrong teaches them to stop
+telling the teacher the truth.
+
+WHAT YOU MAY MARK: a chosen option, a matched pair, a completed word, a numeric
+answer. Report these with `correct` and a numeric `mark`, never exceeding that
+section's autoMarks.
+
+WHAT YOU MUST NOT MARK: explanations, justifications, reasoning. Send the text and
+leave `correct` as null. Keyword-matching an explanation scores a student who
+writes the right idea in their own words as wrong, and rewards one who sprinkles
+in the right nouns.
+
+TELL THE STUDENT: on the Starter, Main Activity and Exit Ticket show
+"N marks — your teacher will see and review this". Do NOT promise a grade or show
+a final total: the teacher decides whether and how to mark it.
+
+Fill in every [square-bracket] descriptor with wording specific to [TOPIC NAME] at
+Grade [GRADE]. "Explains clearly" is not a descriptor.
 
 SECTION VISIBILITY — students must see ONLY the section the teacher has started.
 On receiving start_stage, show that section and hide the others; between stages

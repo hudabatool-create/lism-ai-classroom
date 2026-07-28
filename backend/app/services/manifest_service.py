@@ -44,19 +44,77 @@ def extract_manifest(html: str, *, fallback_title: str = "") -> dict:
         # activity that ignores stage commands still won't hide its sections.
         manifest["managed"] = True
         manifest["stagesInferred"] = True
+        manifest["totalMarks"] = _coerce_marks(sum(s["marks"] or 0 for s in manifest["stages"]))
         return manifest
 
     return _unmanaged_manifest(fallback_title)
 
 
+def _coerce_marks(value) -> float | None:
+    """Marks, or None when the stage genuinely awards none.
+
+    None and 0 mean different things all the way through the reports: None is
+    "this stage isn't marked", 0 is "marked, scored nothing". Anything
+    unparseable becomes None rather than 0, so a malformed manifest can never
+    invent a zero against a student.
+    """
+    if value is None or value is False or value == "":
+        return None
+    try:
+        marks = float(value)
+    except (TypeError, ValueError):
+        return None
+    return marks if marks > 0 else None
+
+
+def _normalize_criteria(raw) -> list[dict]:
+    """Rubric criteria, dropping any that carry no marks."""
+    criteria = []
+    for item in raw or []:
+        if not isinstance(item, dict):
+            continue
+        marks = _coerce_marks(item.get("marks"))
+        if marks is None:
+            continue
+        criteria.append({
+            "label": str(item.get("label") or "Criterion"),
+            "marks": marks,
+            "descriptor": str(item.get("descriptor") or ""),
+            # Whether the activity can score this itself. Anything not
+            # explicitly objective needs a human, which is the safe default:
+            # a wrong auto-mark on written work is worse than no mark.
+            "objective": bool(item.get("objective", False)),
+        })
+    return criteria
+
+
 def _normalize_stage(raw: dict, index: int) -> dict:
+    marks = _coerce_marks(raw.get("marks"))
+    criteria = _normalize_criteria(raw.get("rubric"))
+
+    # The portion the activity can mark on its own. Declared value wins;
+    # otherwise it is the sum of the objective rubric criteria. Never more
+    # than the stage total -- the remainder is what the teacher owes.
+    auto_marks = _coerce_marks(raw.get("autoMarks"))
+    if auto_marks is None and criteria:
+        auto_marks = _coerce_marks(sum(c["marks"] for c in criteria if c["objective"]))
+    if marks is None:
+        auto_marks = None
+    elif auto_marks is not None:
+        auto_marks = min(auto_marks, marks)
+
     return {
         "id": raw.get("id") or f"stage-{index}",
         "label": raw.get("label") or f"Stage {index + 1}",
         "type": raw.get("type") or "activity",
         "durationSeconds": int(raw.get("durationSeconds") or DEFAULT_STAGE_DURATION_SECONDS),
         "sequentialLock": bool(raw.get("sequentialLock", True)),
-        "marks": raw.get("marks"),
+        "marks": marks,
+        "autoMarks": auto_marks,
+        # Marks no machine should award: the teacher's to give, after seeing
+        # the work and usually after discussing it with the class.
+        "teacherMarks": None if marks is None else marks - (auto_marks or 0),
+        "rubric": criteria,
     }
 
 
@@ -76,6 +134,7 @@ def _normalize_manifest(raw: dict) -> dict:
         "deliveryMode": raw.get("deliveryMode", "lesson"),
         "sessionType": raw.get("sessionType", "lesson"),
         "stages": stages,
+        "totalMarks": _coerce_marks(sum(s["marks"] or 0 for s in stages)),
     }
 
 
@@ -263,4 +322,6 @@ def _unmanaged_manifest(title: str) -> dict:
         "deliveryMode": "lesson",
         "sessionType": "lesson",
         "stages": [_normalize_stage({"id": "main", "label": title or "Activity", "type": "standalone"}, 0)],
+        # Arbitrary HTML declares no marks, and we will not invent any.
+        "totalMarks": None,
     }

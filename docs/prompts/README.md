@@ -62,6 +62,36 @@ already contain them, so avoid duplicating them by hand:
   the preview rules. See `docs/LISM_ACTIVITY_CONTRACT.md` for the full
   specification that both sides implement.
 
+## Marks
+
+Two rules decide what carries marks, and both are in the prompts:
+
+**At least 70% of an activity's marks must be objectively markable.** The teacher's
+share has to stay small enough that marking actually happens — marking abandoned
+in week three is worse than none, because the students were told a mark was
+coming. Starter and Exit Ticket are the deliberate exception at 60%: adjudicating
+the misconception item is the point of those sections.
+
+**Practice tools carry no marks at all.** Flashcards and Brainstorm Board declare
+`"marks": null` throughout. Scoring them turns rehearsing and thinking aloud into
+performing for a grade.
+
+A full lesson totals 20 — Starter 5, Main Activity 10, Exit Ticket 5. A teacher
+converts that to a percentage instantly, and each section's weight matches the
+time it gets.
+
+Stages declare `marks` (the total), `autoMarks` (what the activity can score
+itself) and a `rubric`. The activity marks closed items — a chosen option, a
+matched pair, a passing test — and must never score extended writing: it sends
+the text with `correct: null` and the teacher awards those marks in
+**Reports → Mark**. `backend/app/services/scoring.py` is the single source of
+truth for the arithmetic, so the student's report, the marking panel and the
+exported gradebook cannot disagree.
+
+Anything nobody has marked is reported as **pending**, never as zero, and exports
+leave those cells blank. A blank says "not marked"; a zero says "this student
+earned nothing", and a spreadsheet can't tell the reader which you meant.
+
 ## When the manifest goes missing
 
 An outside AI sometimes drops the manifest block. `manifest_service.py` then

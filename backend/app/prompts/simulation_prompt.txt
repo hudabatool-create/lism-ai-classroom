@@ -90,9 +90,9 @@ A. Emit exactly one inert manifest in <head>:
   "stages": [
     {"id":"scenario","label":"Scenario","type":"activity","durationSeconds":180,"sequentialLock":true,"marks":null},
     {"id":"explore","label":"Explore the Variables","type":"activity","durationSeconds":420,"sequentialLock":true,"marks":null},
-    {"id":"observation","label":"Observation","type":"activity","durationSeconds":240,"sequentialLock":true,"marks":null},
-    {"id":"analysis","label":"Analysis","type":"activity","durationSeconds":300,"sequentialLock":true,"marks":null},
-    {"id":"reflection","label":"Reflection","type":"activity","durationSeconds":180,"sequentialLock":true,"marks":null}
+    {"id":"observation","label":"Observation","type":"activity","durationSeconds":240,"sequentialLock":true,"marks":4,"autoMarks":4,"rubric":[{"label":"Accuracy","marks":4,"objective":true,"descriptor":"[write what a correct response contains for this topic]"}]},
+    {"id":"analysis","label":"Analysis","type":"activity","durationSeconds":300,"sequentialLock":true,"marks":4,"autoMarks":3,"rubric":[{"label":"Accuracy","marks":3,"objective":true,"descriptor":"[write what a correct response contains for this topic]"},{"label":"Reasoning","marks":1,"objective":false,"descriptor":"[write what a Grade [GRADE] explanation must show to earn these marks]"}]},
+    {"id":"reflection","label":"Reflection","type":"activity","durationSeconds":180,"sequentialLock":true,"marks":2,"autoMarks":0,"rubric":[{"label":"Reasoning","marks":2,"objective":false,"descriptor":"[write what a Grade [GRADE] explanation must show to earn these marks]"}]}
   ]
 }
 </script>
@@ -134,6 +134,34 @@ F. Teacher preview: when the URL contains ?preview=1, show Previous/Next and a s
 
 G. Nothing is uploaded anywhere. Answers travel only via postMessage to the LISM page that embeds the
    activity. Opened standalone, nothing leaves the device at all.
+
+
+MARKS
+
+The manifest above already carries this activity's marks. Do not change the totals — LISM adds them up,
+shows them to students, and puts them in the teacher's gradebook.
+
+Each marked section declares three things:
+  "marks"     what the section is worth in total
+  "autoMarks" the part this activity can score by itself
+  "rubric"    what each part is awarded for
+
+Fill in every [square-bracket] descriptor in the rubric with wording specific to [TOPIC NAME] at Grade
+[GRADE]. "Explains clearly" is not a descriptor — say what a correct explanation of THIS content must
+contain.
+
+WHAT YOU MAY SCORE AUTOMATICALLY: a chosen option, a matched pair, a placed item, a completed word, a
+numeric answer, a passing test. Report these with `correct` and, when you know it, a numeric `mark` in
+the student_submitted payload — never more than that section's autoMarks.
+
+WHAT YOU MUST NOT SCORE: extended writing — explanations, justifications, reasoning. Send the student's
+text and leave `correct` as null. The teacher awards those marks after reading the work, usually after
+discussing it with the class. Keyword-matching an explanation would score a student who writes the right
+idea in their own words as wrong, and reward one who sprinkles in the right nouns.
+
+TELL THE STUDENT: on any marked section show "N marks — your teacher will see and review this". Do NOT
+promise a grade or display a final total: the teacher decides whether and how to mark it, and a student
+promised a number that never arrives stops believing the message.
 
 
 EDUCATIONAL QUALITY (mandatory — this decides whether the activity is usable in a real classroom)

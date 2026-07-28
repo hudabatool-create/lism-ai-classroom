@@ -11,6 +11,7 @@ would read to a child as "you scored nothing".
 from datetime import datetime
 
 from app.services.data_store import store
+from app.services.scoring import score_student
 
 
 def _parse(ts: str | None) -> datetime | None:
@@ -40,11 +41,7 @@ def build_student_report(session: dict, activity: dict, student: dict) -> dict:
     answered_stage_ids = {r["stage_id"] for r in responses if r.get("stage_id")}
     stages_completed = sum(1 for s in stages if s["id"] in answered_stage_ids)
 
-    # Marks only exist for stages that declare them (the Main Task's 10).
-    scored_stages = [s for s in stages if s.get("marks")]
-    max_marks = sum(s["marks"] for s in scored_stages) or None
-    marked = [r for r in responses if r.get("mark") is not None]
-    earned = sum(r["mark"] for r in marked) if marked else None
+    score = score_student(stages, responses)
 
     correct_count = sum(1 for r in responses if r.get("correct") is True)
     graded_count = sum(1 for r in responses if r.get("correct") is not None)
@@ -62,25 +59,48 @@ def build_student_report(session: dict, activity: dict, student: dict) -> dict:
         "stages_completed": stages_completed,
         "stages_total": len(stages),
         "stage_breakdown": [
-            {"label": s["label"], "completed": s["id"] in answered_stage_ids}
-            for s in stages
+            {
+                "label": b["label"],
+                "completed": b["stage_id"] in answered_stage_ids,
+                "marks": b["marks"],
+                "awarded": b["awarded"],
+                "status": b["status"],
+            }
+            for b in score["stages"]
         ],
         # None (not 0) when the activity awards no marks, so the UI can say
         # "not scored" instead of implying the student earned nothing.
-        "estimated_score": earned,
-        "max_score": max_marks,
+        "estimated_score": score["awarded_total"],
+        "max_score": score["max_score"],
+        "auto_scored": score["auto_scored"],
+        "teacher_scored": score["teacher_scored"],
+        "pending_review": score["pending_review"],
         "responses_submitted": len(responses),
         "answered_correctly": correct_count,
         "auto_graded_count": graded_count,
         "help_requests": student.get("help_requests", 0),
         "focus_warnings": violations,
         "time_spent_seconds": _time_spent_seconds(student, session),
-        "teacher_review_pending": True,
-        "teacher_review_message": (
-            "Your teacher will review your answers and confirm your final mark. "
-            "Any score shown here is an estimate."
-        ),
+        "teacher_review_pending": not score["fully_graded"],
+        "teacher_review_message": _review_message(score),
     }
+
+
+def _review_message(score: dict) -> str:
+    """What the student is told about their score.
+
+    Never promises a number that might not arrive: a teacher may choose not to
+    mark the starter at all, and a child told "you will be graded" who then
+    sees nothing learns that the message means nothing.
+    """
+    if not score["max_score"]:
+        return "This activity isn't marked. Your teacher can still see everything you wrote."
+    if score["fully_graded"]:
+        return "Your teacher has reviewed and marked your work."
+    return (
+        "Your teacher will see and review your work. "
+        "Any score shown here so far is from the parts that mark themselves."
+    )
 
 
 def _completion_status(done: int, total: int) -> str:

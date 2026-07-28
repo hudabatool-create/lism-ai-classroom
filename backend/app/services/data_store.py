@@ -136,6 +136,9 @@ def _response_dict(row: Response) -> dict:
         "correct": row.correct,
         "answer": row.answer,
         "mark": row.mark,
+        "teacher_mark": row.teacher_mark,
+        "teacher_feedback": row.teacher_feedback,
+        "graded_at": row.graded_at,
         "submitted_at": row.submitted_at,
     }
 
@@ -705,6 +708,37 @@ class DataStore:
         with SessionLocal() as db:
             rows = db.scalars(select(Response).where(Response.session_id == session_id).order_by(Response.submitted_at))
             return [_response_dict(r) for r in rows]
+
+    def set_teacher_mark(
+        self,
+        session_id: str,
+        student_id: str,
+        stage_id: str,
+        mark: float | None,
+        feedback: str | None = None,
+    ) -> dict | None:
+        """Record the teacher's mark for one student's stage.
+
+        A mark of None clears it back to ungraded, which the teacher needs
+        when they mark the wrong row -- otherwise the only way to undo is to
+        leave a wrong number in the gradebook.
+        """
+        with self._lock, SessionLocal() as db:
+            row = db.scalar(
+                select(Response).where(
+                    Response.session_id == session_id,
+                    Response.student_id == student_id,
+                    Response.stage_id == stage_id,
+                )
+            )
+            if row is None:
+                return None
+            row.teacher_mark = mark
+            row.teacher_feedback = feedback
+            row.graded_at = _now() if mark is not None else None
+            db.commit()
+            db.refresh(row)
+            return _response_dict(row)
 
     def has_response_for_stage(self, session_id: str, student_id: str, stage_id: str) -> bool:
         """One answer per student per stage. Without this a student could

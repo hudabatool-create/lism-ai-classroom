@@ -101,7 +101,15 @@ class Response(Base):
     stage_id: Mapped[str | None] = mapped_column(String, nullable=True)
     correct: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     answer: Mapped[str] = mapped_column(Text, default="")
+    # What the activity scored itself, where it could.
     mark: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # What the teacher awarded after reading the work. Kept separate from
+    # `mark` so neither overwrites the other: the teacher can see what the
+    # activity thought, disagree, and have their judgement be the one that
+    # travels to the gradebook. NULL means not yet marked -- never zero.
+    teacher_mark: Mapped[float | None] = mapped_column(Float, nullable=True)
+    teacher_feedback: Mapped[str | None] = mapped_column(Text, nullable=True)
+    graded_at: Mapped[str | None] = mapped_column(String, nullable=True)
     submitted_at: Mapped[str] = mapped_column(String, nullable=False)
 
 

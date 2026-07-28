@@ -74,9 +74,18 @@ interface StudentReport {
   completion_status: string;
   stages_completed: number;
   stages_total: number;
-  stage_breakdown: { label: string; completed: boolean }[];
+  stage_breakdown: {
+    label: string;
+    completed: boolean;
+    marks: number | null;
+    awarded: number | null;
+    status: string;
+  }[];
   estimated_score: number | null;
   max_score: number | null;
+  auto_scored: number | null;
+  teacher_scored: number | null;
+  pending_review: number | null;
   responses_submitted: number;
   answered_correctly: number;
   auto_graded_count: number;
@@ -511,6 +520,7 @@ export default function JoinPage() {
   }
 
   const stageLabel = currentStageRef.current?.label ?? info?.current_stage?.label ?? null;
+  const stageMarks = currentStageRef.current?.marks ?? info?.current_stage?.marks ?? null;
 
   return (
     <div className="relative flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">
@@ -527,6 +537,14 @@ export default function JoinPage() {
           <span className="opacity-90">
             {paused ? "paused by your teacher" : remainingSeconds === 0 ? "time's up — wait for your teacher" : "left"}
           </span>
+        </div>
+      )}
+      {/* Tells students this section counts, without promising a number that
+          might not arrive -- a teacher may choose not to mark it, and a child
+          told "you will be graded" who then sees nothing stops believing it. */}
+      {stageMarks !== null && stageMarks > 0 && !report && (
+        <div className="bg-brand-600 px-4 py-2 text-center text-sm font-medium text-white">
+          {stageMarks} mark{stageMarks === 1 ? "" : "s"} &mdash; your teacher will see and review this
         </div>
       )}
       {timeUp && !report && (
@@ -633,7 +651,10 @@ export default function JoinPage() {
               <ReportTile label="Status" value={report.completion_status} />
               <ReportTile label="Sections completed" value={`${report.stages_completed} of ${report.stages_total}`} />
               <ReportTile
-                label="Estimated score"
+                // "So far" not "estimated": the number is real marks already
+                // earned on the parts that mark themselves, with the rest
+                // still to come from the teacher.
+                label={report.pending_review ? "Marks so far" : "Your score"}
                 value={
                   report.estimated_score === null
                     ? "Not scored"
@@ -656,7 +677,16 @@ export default function JoinPage() {
                 {report.stage_breakdown.map((s) => (
                   <li key={s.label} className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
                     <span className={s.completed ? "text-green-600" : "text-slate-400"}>{s.completed ? "✓" : "○"}</span>
-                    {s.label}
+                    <span className="flex-1">{s.label}</span>
+                    {s.marks !== null && (
+                      <span className="text-xs text-slate-500 dark:text-slate-400">
+                        {s.status === "pending_review" || s.status === "not_answered"
+                          ? // Never show a number here as if it were final --
+                            // the teacher hasn't looked at it yet.
+                            `with your teacher · ${s.marks}`
+                          : `${s.awarded ?? "—"} / ${s.marks}`}
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>

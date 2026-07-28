@@ -138,6 +138,17 @@ G. Nothing is uploaded anywhere. Answers travel only via postMessage to the LISM
    activity. Opened standalone, nothing leaves the device at all.
 
 
+NO MARKS
+
+This activity carries no marks, and every section's "marks" must stay null. That is deliberate, not an
+omission: it is for practice and thinking aloud, and attaching a score to it makes students perform for
+the mark instead of using the tool. Give immediate feedback and let them retry freely.
+
+The teacher still sees everything each student did, which is what they actually need from this activity.
+
+Do not display a score, a percentage or a leaderboard.
+
+
 EDUCATIONAL QUALITY (mandatory — this decides whether the activity is usable in a real classroom)
 
 Every question must be about THIS topic's actual content. If a question would still make sense with a
