@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 import { api } from "@/lib/api";
@@ -44,9 +45,17 @@ export default function UploadActivityPage() {
     <div className="max-w-2xl">
       <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Upload HTML Activity</h1>
       <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-        Upload an activity built with ChatGPT, Claude, Gemini, Copilot, or hand-coded HTML &mdash; a single .html
-        file, or a .zip containing an HTML file plus its CSS, JavaScript, and images. LISM hosts it for you &mdash;
-        no deployment needed.
+        Already have your file? Drop it in below &mdash; a single .html file, or a .zip containing an HTML file plus
+        its CSS, JavaScript, and images. LISM hosts it for you, no deployment needed.
+      </p>
+      <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+        Don&apos;t have one yet?{" "}
+        <Link href="/dashboard/activities/new" className="font-medium text-brand-600 hover:underline">
+          Create an Activity
+        </Link>{" "}
+        walks you through it: pick an activity type, copy the LISM prompt, and build it in ChatGPT, Claude or Gemini.
+        Activities made that way arrive with named stages, so you control the pacing and see every student&apos;s work
+        as they go.
       </p>
 
       <form
