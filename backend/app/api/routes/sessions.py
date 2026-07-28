@@ -22,7 +22,7 @@ TIMER_SOUNDS = ("none", "chime", "bell", "school_bell")
 
 
 def _join_url(code: str) -> str:
-    return f"{settings.frontend_origin}/join/{code}"
+    return f"{settings.canonical_origin}/join/{code}"
 
 
 # --- Teacher-facing ---------------------------------------------------

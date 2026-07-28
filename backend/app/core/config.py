@@ -50,7 +50,26 @@ class Settings(BaseSettings):
     cookie_secure: bool = False
     cookie_samesite: str = "lax"
 
+    # Comma-separated when the app answers on more than one domain -- a custom
+    # domain plus the platform's default, say. The FIRST one is canonical: it
+    # is what goes into student join links and verification emails, so it must
+    # be the address you actually want people to see and bookmark.
+    #
+    # Every listed origin is allowed through CORS. Getting this wrong is
+    # invisible until someone tries to log in: the browser blocks the request
+    # before it reaches any route, so the server logs stay clean while the
+    # whole app appears broken.
     frontend_origin: str = "http://localhost:3000"
+
+    @property
+    def frontend_origins(self) -> list[str]:
+        return [o.strip().rstrip("/") for o in self.frontend_origin.split(",") if o.strip()]
+
+    @property
+    def canonical_origin(self) -> str:
+        """The address used in links we send to people."""
+        origins = self.frontend_origins
+        return origins[0] if origins else "http://localhost:3000"
 
     # Optional: sends real email verification / password reset messages via
     # SMTP. Without smtp_host set, email_service.py logs the message (with

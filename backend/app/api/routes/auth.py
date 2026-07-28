@@ -47,7 +47,7 @@ def _public(teacher: dict) -> dict:
 
 def _send_verification_email(teacher: dict) -> None:
     token = store.create_email_verification_token(teacher["id"])
-    verify_url = f"{settings.frontend_origin}/verify-email/{token}"
+    verify_url = f"{settings.canonical_origin}/verify-email/{token}"
     send_verification_email(teacher["email"], teacher["name"], verify_url)
 
 
@@ -145,7 +145,7 @@ def forgot_password(payload: ForgotPasswordRequest):
     teacher = store.get_teacher_by_email(payload.email)
     if teacher:
         token = store.create_password_reset_token(teacher["id"])
-        reset_url = f"{settings.frontend_origin}/reset-password/{token}"
+        reset_url = f"{settings.canonical_origin}/reset-password/{token}"
         send_password_reset_email(teacher["email"], teacher["name"], reset_url)
     return {"ok": True}
 

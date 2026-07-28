@@ -68,6 +68,26 @@ git push -u origin master
 
 Go back to Railway and update `FRONTEND_ORIGIN` to the real Vercel URL from step 3 (exact origin, no trailing slash). Railway redeploys automatically on a variable change. This value is used for both CORS (so the browser is allowed to call the API at all) and for the join links/QR codes students actually see, so it has to be correct.
 
+### Adding a custom domain
+
+**Update `FRONTEND_ORIGIN` the moment you point a new domain at the app**, or logging in from it will fail. The browser blocks the request before it reaches any route, so Railway's logs stay clean while the whole app appears broken — there is nothing to find on the server side.
+
+`FRONTEND_ORIGIN` accepts a comma-separated list, and the **first entry is canonical**: it is what goes into student join links, QR codes and verification emails. Put the domain you want people to see first.
+
+```
+FRONTEND_ORIGIN=https://lismaiclass.com,https://www.lismaiclass.com,https://lism-ai-classroom.vercel.app
+```
+
+Keeping the old `.vercel.app` origin in the list means links already shared with students keep working. Note that adding a custom domain in Vercel can move the production deployment off the `.vercel.app` alias entirely — if that address starts returning `DEPLOYMENT_NOT_FOUND`, the app has not gone down, it has moved.
+
+To check CORS from a new domain without opening a browser:
+
+```bash
+curl -s -D - -o /dev/null -X OPTIONS -H "Origin: https://YOUR-DOMAIN" -H "Access-Control-Request-Method: POST" https://YOUR-BACKEND/api/auth/login | grep -i "access-control-allow-origin"
+```
+
+An allowed origin echoes back in that header. No header means the browser will refuse the request.
+
 ## 5. Smoke test
 
 1. Open the Vercel URL, sign up a teacher account.
