@@ -17,6 +17,33 @@ _WEAK_JWT_SECRETS = {
 }
 _MIN_JWT_SECRET_LENGTH = 16
 
+# The school's own domains, allowed through CORS unconditionally.
+#
+# These live in code rather than only in an environment variable because
+# getting the variable wrong takes the whole app down in the least debuggable
+# way there is: the browser blocks every request before it reaches a route, so
+# users see "Failed to fetch" while the server logs stay perfectly clean and
+# the health check stays green. That happened, and cost a day.
+#
+# This is safe here because LISM is single-tenant: there is exactly one school,
+# and these are its addresses. It is NOT a pattern to copy into a multi-tenant
+# service, where the allowed origins genuinely are per-deployment config.
+#
+# FRONTEND_ORIGIN still works and is still the right place for staging and
+# preview domains -- it now adds to this list instead of replacing it.
+PRODUCTION_ORIGINS = (
+    "https://lismaiclass.com",
+    "https://www.lismaiclass.com",
+)
+
+# Off for local dev and tests, where allowing the live domains would be noise.
+# Any deployment sets one of these.
+import os  # noqa: E402 -- kept next to the flag it controls
+
+PRODUCTION_ORIGINS_ENABLED = bool(
+    os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("PORT") or os.getenv("LISM_PRODUCTION")
+)
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -50,26 +77,29 @@ class Settings(BaseSettings):
     cookie_secure: bool = False
     cookie_samesite: str = "lax"
 
-    # Comma-separated when the app answers on more than one domain -- a custom
-    # domain plus the platform's default, say. The FIRST one is canonical: it
-    # is what goes into student join links and verification emails, so it must
-    # be the address you actually want people to see and bookmark.
+    # Extra origins allowed through CORS, comma-separated. These are added to
+    # PRODUCTION_ORIGINS above rather than replacing them, so a stale or
+    # unreachable value here can no longer lock everyone out of the live site.
     #
-    # Every listed origin is allowed through CORS. Getting this wrong is
-    # invisible until someone tries to log in: the browser blocks the request
-    # before it reaches any route, so the server logs stay clean while the
-    # whole app appears broken.
+    # Still worth setting correctly: it is how staging, preview deployments and
+    # any future domain get allowed. Local dev keeps the default.
     frontend_origin: str = "http://localhost:3000"
 
     @property
     def frontend_origins(self) -> list[str]:
-        return [o.strip().rstrip("/") for o in self.frontend_origin.split(",") if o.strip()]
+        configured = [o.strip().rstrip("/") for o in self.frontend_origin.split(",") if o.strip()]
+        # Production domains first, so the canonical origin below is the address
+        # that is actually serving the app.
+        merged = [o for o in PRODUCTION_ORIGINS if PRODUCTION_ORIGINS_ENABLED]
+        for origin in configured:
+            if origin not in merged:
+                merged.append(origin)
+        return merged or ["http://localhost:3000"]
 
     @property
     def canonical_origin(self) -> str:
         """The address used in links we send to people."""
-        origins = self.frontend_origins
-        return origins[0] if origins else "http://localhost:3000"
+        return self.frontend_origins[0]
 
     # Optional: sends real email verification / password reset messages via
     # SMTP. Without smtp_host set, email_service.py logs the message (with
