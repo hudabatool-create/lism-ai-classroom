@@ -39,4 +39,22 @@ app.include_router(reports.router)
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "app": settings.app_name}
+    """Liveness, plus the two settings that break the app invisibly when wrong.
+
+    A misconfigured origin fails in the browser before the request reaches any
+    route, so the server logs stay clean while the whole app appears broken --
+    there is genuinely nothing to find server-side. Reporting what the running
+    container actually holds turns that from guesswork into one request.
+
+    These are public URLs and public cookie flags, not secrets. No credential,
+    key or connection string is exposed here, and nothing else about the
+    environment is.
+    """
+    return {
+        "status": "ok",
+        "app": settings.app_name,
+        "frontend_origins": settings.frontend_origins,
+        "canonical_origin": settings.canonical_origin,
+        "cookie_samesite": settings.cookie_samesite,
+        "cookie_secure": settings.cookie_secure,
+    }
