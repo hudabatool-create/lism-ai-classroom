@@ -11,9 +11,27 @@ from app.core.config import settings
 
 _is_sqlite = settings.database_url.startswith("sqlite")
 
+# Pool sizing matters now that requests actually run in parallel. While a
+# single lock serialised every write, one connection was enough and these
+# settings would have changed nothing; without it, a class of thirty pressing
+# Join together needs real concurrency.
+#
+# pool_pre_ping costs one cheap round trip per checkout and saves the
+# "server closed the connection unexpectedly" failure that hits any pooled
+# app whose database or proxy times out idle connections -- which is exactly
+# what a classroom does between lessons.
+_pool_options = {} if _is_sqlite else {
+    "pool_size": 10,
+    "max_overflow": 20,
+    "pool_pre_ping": True,
+    "pool_recycle": 1800,
+    "pool_timeout": 30,
+}
+
 engine = create_engine(
     settings.database_url,
     connect_args={"check_same_thread": False} if _is_sqlite else {},
+    **_pool_options,
 )
 
 if _is_sqlite:

@@ -68,3 +68,42 @@ def add_missing_columns() -> None:
             with engine.begin() as conn:
                 conn.execute(text(ddl))
             logger.warning("Added missing column %s.%s", table.name, column.name)
+
+    _ensure_student_name_key()
+
+
+def _ensure_student_name_key() -> None:
+    """Backfill students.name_key and enforce one participant per name.
+
+    The uniqueness used to be maintained by a process-wide lock around the
+    find-or-create, which serialised every write in the app and made a class
+    of thirty joining at once take minutes. The database can enforce it for
+    free and in parallel -- this puts the guarantee where it belongs.
+
+    Backfill first, then index: creating the index on unbackfilled rows would
+    collide every NULL on SQLite.
+    """
+    from app.services.data_store import _normalize_name
+
+    with engine.begin() as conn:
+        rows = conn.execute(text("SELECT id, name FROM students WHERE name_key IS NULL")).fetchall()
+        for row in rows:
+            conn.execute(
+                text("UPDATE students SET name_key = :k WHERE id = :i"),
+                {"k": _normalize_name(row.name), "i": row.id},
+            )
+        if rows:
+            logger.warning("Backfilled name_key for %d students", len(rows))
+
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ix_students_session_name_key "
+                "ON students (session_id, name_key)"
+            ))
+    except Exception as exc:
+        # Historic duplicates (created before this constraint existed) block
+        # the index. The find-or-create still works without it -- it just
+        # falls back to losing a rare race rather than being prevented from
+        # one -- so this must never stop the app booting.
+        logger.warning("Could not create unique student index (existing duplicates?): %s", exc)

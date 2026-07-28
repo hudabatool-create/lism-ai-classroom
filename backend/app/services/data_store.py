@@ -21,6 +21,7 @@ from datetime import datetime, timedelta, timezone
 from threading import Lock
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 
 from app.db.base import SessionLocal
 from app.db.models import (
@@ -176,7 +177,7 @@ class DataStore:
     # --- Teachers ---------------------------------------------------
 
     def create_teacher(self, name: str, email: str, password_hash: str) -> dict:
-        with self._lock, SessionLocal() as db:
+        with SessionLocal() as db:
             row = Teacher(
                 id=_id(),
                 name=name,
@@ -200,7 +201,7 @@ class DataStore:
             return _teacher_dict(row) if row else None
 
     def update_teacher_password(self, teacher_id: str, password_hash: str) -> None:
-        with self._lock, SessionLocal() as db:
+        with SessionLocal() as db:
             row = db.get(Teacher, teacher_id)
             row.password_hash = password_hash
             db.commit()
@@ -208,7 +209,7 @@ class DataStore:
     # --- Email verification ---------------------------------------------------
 
     def create_email_verification_token(self, teacher_id: str) -> str:
-        with self._lock, SessionLocal() as db:
+        with SessionLocal() as db:
             token = secrets.token_urlsafe(32)
             db.add(
                 EmailVerificationToken(
@@ -223,7 +224,7 @@ class DataStore:
     def consume_email_verification_token(self, token: str) -> str | None:
         """Returns the teacher_id and marks the email verified, or None if the
         token doesn't exist or has expired. Single-use -- always removed."""
-        with self._lock, SessionLocal() as db:
+        with SessionLocal() as db:
             record = db.get(EmailVerificationToken, token)
             if record is None:
                 return None
@@ -242,7 +243,7 @@ class DataStore:
     # --- Password reset ---------------------------------------------------
 
     def create_password_reset_token(self, teacher_id: str) -> str:
-        with self._lock, SessionLocal() as db:
+        with SessionLocal() as db:
             token = secrets.token_urlsafe(32)
             db.add(
                 PasswordResetToken(
@@ -257,7 +258,7 @@ class DataStore:
     def consume_password_reset_token(self, token: str) -> str | None:
         """Returns the teacher_id for a valid, unexpired token, or None.
         Single-use -- always removed, whether valid or not."""
-        with self._lock, SessionLocal() as db:
+        with SessionLocal() as db:
             record = db.get(PasswordResetToken, token)
             if record is None:
                 return None
@@ -301,7 +302,7 @@ class DataStore:
     # --- Activities ---------------------------------------------------
 
     def create_activity(self, teacher_id, title, subject, grade, activity_type, html, source, manifest, assets=None) -> dict:
-        with self._lock, SessionLocal() as db:
+        with SessionLocal() as db:
             row = Activity(
                 id=_id(),
                 teacher_id=teacher_id,
@@ -337,7 +338,7 @@ class DataStore:
             return _activity_dict(row) if row else None
 
     def update_activity(self, activity_id: str, title: str, subject: str, grade: str, activity_type: str, html: str, manifest: dict) -> dict:
-        with self._lock, SessionLocal() as db:
+        with SessionLocal() as db:
             row = db.get(Activity, activity_id)
             row.title = title
             row.subject = subject
@@ -351,7 +352,7 @@ class DataStore:
             return _activity_dict(row)
 
     def duplicate_activity(self, activity_id: str) -> dict:
-        with self._lock, SessionLocal() as db:
+        with SessionLocal() as db:
             original = db.get(Activity, activity_id)
             copy_row = Activity(
                 id=_id(),
@@ -382,7 +383,7 @@ class DataStore:
             return db.scalar(select(func.count(SessionModel.id)).where(SessionModel.activity_id == activity_id))
 
     def delete_activity(self, activity_id: str) -> None:
-        with self._lock, SessionLocal() as db:
+        with SessionLocal() as db:
             row = db.get(Activity, activity_id)
             if row is not None:
                 db.delete(row)
@@ -391,7 +392,7 @@ class DataStore:
     # --- Sessions ---------------------------------------------------
 
     def create_session(self, teacher_id: str, activity_id: str, session_type: str = "lesson") -> dict:
-        with self._lock, SessionLocal() as db:
+        with SessionLocal() as db:
             code = _gen_code()
             while db.scalar(select(SessionModel.id).where(SessionModel.code == code)) is not None:
                 code = _gen_code()
@@ -433,7 +434,7 @@ class DataStore:
         max_warnings: int | None = None,
         timer_sound: str | None = None,
     ) -> dict:
-        with self._lock, SessionLocal() as db:
+        with SessionLocal() as db:
             row = db.get(SessionModel, session_id)
             if copy_paste_protection is not None:
                 row.copy_paste_protection = copy_paste_protection
@@ -464,7 +465,7 @@ class DataStore:
             return [_session_dict(r) for r in rows]
 
     def end_session(self, session_id: str) -> dict:
-        with self._lock, SessionLocal() as db:
+        with SessionLocal() as db:
             row = db.get(SessionModel, session_id)
             row.status = "ended"
             row.ended_at = _now()
@@ -474,7 +475,7 @@ class DataStore:
     # --- Stage engine ---------------------------------------------------
 
     def start_stage(self, session_id: str, stage_index: int, duration_seconds: int) -> dict:
-        with self._lock, SessionLocal() as db:
+        with SessionLocal() as db:
             row = db.get(SessionModel, session_id)
             row.current_stage_index = stage_index
             row.stage_status = "running"
@@ -491,7 +492,7 @@ class DataStore:
         duration" maths every client already uses stays correct in both
         states, with no separate paused-at bookkeeping to drift.
         """
-        with self._lock, SessionLocal() as db:
+        with SessionLocal() as db:
             row = db.get(SessionModel, session_id)
             if row.stage_started_at and row.stage_duration_seconds is not None:
                 started = datetime.fromisoformat(row.stage_started_at)
@@ -502,7 +503,7 @@ class DataStore:
             return _session_dict(row)
 
     def resume_stage(self, session_id: str) -> dict:
-        with self._lock, SessionLocal() as db:
+        with SessionLocal() as db:
             row = db.get(SessionModel, session_id)
             row.stage_started_at = _now()
             row.stage_status = "running"
@@ -510,14 +511,14 @@ class DataStore:
             return _session_dict(row)
 
     def end_stage(self, session_id: str) -> dict:
-        with self._lock, SessionLocal() as db:
+        with SessionLocal() as db:
             row = db.get(SessionModel, session_id)
             row.stage_status = "ended"
             db.commit()
             return _session_dict(row)
 
     def extend_stage(self, session_id: str, additional_seconds: int) -> dict:
-        with self._lock, SessionLocal() as db:
+        with SessionLocal() as db:
             row = db.get(SessionModel, session_id)
             row.stage_duration_seconds = (row.stage_duration_seconds or 0) + additional_seconds
             db.commit()
@@ -540,11 +541,14 @@ class DataStore:
         the same expectation other classroom tools set.
         """
         key = _normalize_name(name)
-        with self._lock, SessionLocal() as db:
-            existing = next(
-                (s for s in db.scalars(select(Student).where(Student.session_id == session_id)) if _normalize_name(s.name) == key),
-                None,
+
+        def lookup(db):
+            return db.scalar(
+                select(Student).where(Student.session_id == session_id, Student.name_key == key)
             )
+
+        with SessionLocal() as db:
+            existing = lookup(db)
             if existing is not None:
                 # Keep the latest grade/section if they filled them in this time.
                 if grade:
@@ -558,6 +562,7 @@ class DataStore:
                 id=_id(),
                 session_id=session_id,
                 name=name,
+                name_key=key,
                 grade=grade,
                 section=section,
                 joined_at=_now(),
@@ -566,7 +571,18 @@ class DataStore:
                 coach_messages=0,
             )
             db.add(row)
-            db.commit()
+            try:
+                db.commit()
+            except IntegrityError:
+                # Two devices for the same student hit Join in the same
+                # instant and both saw no existing row. The unique index let
+                # exactly one insert through; the loser reads the winner's row
+                # and treats it as a rejoin, which is what actually happened.
+                db.rollback()
+                winner = lookup(db)
+                if winner is None:
+                    raise
+                return _student_dict(winner), True
             return _student_dict(row), False
 
     def list_student_responses(self, session_id: str, student_id: str) -> list[dict]:
@@ -600,7 +616,7 @@ class DataStore:
             return None
 
     def increment_coach_messages(self, student_id: str) -> int | None:
-        with self._lock, SessionLocal() as db:
+        with SessionLocal() as db:
             row = db.get(Student, student_id)
             if row is None:
                 return None
@@ -609,7 +625,7 @@ class DataStore:
             return row.coach_messages
 
     def set_needs_help(self, student_id: str, value: bool) -> dict | None:
-        with self._lock, SessionLocal() as db:
+        with SessionLocal() as db:
             row = db.get(Student, student_id)
             if row is None:
                 return None
@@ -622,7 +638,7 @@ class DataStore:
     # --- Focus Mode ---------------------------------------------------
 
     def add_focus_violation(self, session_id: str, student_id: str, violation_type: str) -> dict:
-        with self._lock, SessionLocal() as db:
+        with SessionLocal() as db:
             count = (
                 db.scalar(
                     select(func.count(FocusViolation.id)).where(
@@ -689,7 +705,7 @@ class DataStore:
         answer: str,
         mark: float | None = None,
     ) -> dict:
-        with self._lock, SessionLocal() as db:
+        with SessionLocal() as db:
             row = Response(
                 id=_id(),
                 session_id=session_id,
@@ -723,7 +739,7 @@ class DataStore:
         when they mark the wrong row -- otherwise the only way to undo is to
         leave a wrong number in the gradebook.
         """
-        with self._lock, SessionLocal() as db:
+        with SessionLocal() as db:
             row = db.scalar(
                 select(Response).where(
                     Response.session_id == session_id,
@@ -761,7 +777,7 @@ class DataStore:
     # stored here) ---------------------------------------------------
 
     def create_prompt(self, teacher_id: str, title: str, category: str, activity_type: str, body: str) -> dict:
-        with self._lock, SessionLocal() as db:
+        with SessionLocal() as db:
             now = _now()
             row = Prompt(
                 id=_id(),
@@ -789,7 +805,7 @@ class DataStore:
             return _prompt_dict(row) if row else None
 
     def update_prompt(self, prompt_id: str, title: str, category: str, activity_type: str, body: str) -> dict:
-        with self._lock, SessionLocal() as db:
+        with SessionLocal() as db:
             row = db.get(Prompt, prompt_id)
             row.title = title
             row.category = category
@@ -800,14 +816,14 @@ class DataStore:
             return _prompt_dict(row)
 
     def set_prompt_favorite(self, prompt_id: str, value: bool) -> dict:
-        with self._lock, SessionLocal() as db:
+        with SessionLocal() as db:
             row = db.get(Prompt, prompt_id)
             row.is_favorite = value
             db.commit()
             return _prompt_dict(row)
 
     def delete_prompt(self, prompt_id: str) -> None:
-        with self._lock, SessionLocal() as db:
+        with SessionLocal() as db:
             row = db.get(Prompt, prompt_id)
             if row is not None:
                 db.delete(row)

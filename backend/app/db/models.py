@@ -84,6 +84,11 @@ class Student(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True)
     session_id: Mapped[str] = mapped_column(ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String, nullable=False)
+    # Normalised name, unique per session. This is what makes rejoining safe
+    # without holding a lock: the database rejects the second insert, so two
+    # simultaneous joins from the same student can't become two participants.
+    # Indexed so a join is a key lookup rather than a scan of the whole class.
+    name_key: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     grade: Mapped[str] = mapped_column(String, default="")
     section: Mapped[str] = mapped_column(String, default="")
     joined_at: Mapped[str] = mapped_column(String, nullable=False)
