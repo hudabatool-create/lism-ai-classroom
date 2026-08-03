@@ -82,6 +82,8 @@ def health_db():
 
     from app.db.base import engine
 
+    from urllib.parse import urlsplit
+
     samples = []
     for _ in range(5):
         t0 = time.perf_counter()
@@ -89,7 +91,18 @@ def health_db():
             conn.execute(text("SELECT 1"))
         samples.append(round((time.perf_counter() - t0) * 1000, 1))
     pool = engine.pool
+
+    # Host only -- never the user or password. Enough to see which database
+    # the running container is actually talking to, which is the question
+    # that matters when a DATABASE_URL change appears not to have landed.
+    parts = urlsplit(settings.database_url)
+    host = parts.hostname or "(none)"
+    region = next((r for r in ("ap-southeast-1", "ap-south-1", "eu-central-1",
+                               "us-east-1", "us-west-1") if r in host), "unknown")
+
     return {
+        "db_host": host,
+        "db_region": region,
         "round_trip_ms": samples,
         "median_ms": sorted(samples)[len(samples) // 2],
         "pool_size": getattr(pool, "size", lambda: None)(),
