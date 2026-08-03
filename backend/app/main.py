@@ -1,3 +1,5 @@
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -8,6 +10,9 @@ from app.db.base import Base, engine
 from app.db.migrate import add_missing_columns
 
 app = FastAPI(title=settings.app_name)
+
+# Railway sets this on every deploy; empty locally.
+_COMMIT = (os.getenv("RAILWAY_GIT_COMMIT_SHA") or "local")[:8]
 
 
 @app.on_event("startup")
@@ -53,8 +58,41 @@ def health():
     return {
         "status": "ok",
         "app": settings.app_name,
+        # Which build is actually serving. Without this, "did my fix deploy?"
+        # can only be answered by inference, which cost hours on this project.
+        "commit": _COMMIT,
         "frontend_origins": settings.frontend_origins,
         "canonical_origin": settings.canonical_origin,
         "cookie_samesite": settings.cookie_samesite,
         "cookie_secure": settings.cookie_secure,
+    }
+
+
+@app.get("/api/health/db")
+def health_db():
+    """Round-trip time to the database, measured from inside the container.
+
+    A classroom's speed is dominated by this number: every join and every
+    answer costs at least one of these. If it is tens of milliseconds the app
+    is the bottleneck; if it is hundreds, the database's region is.
+    """
+    import time
+
+    from sqlalchemy import text
+
+    from app.db.base import engine
+
+    samples = []
+    for _ in range(5):
+        t0 = time.perf_counter()
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        samples.append(round((time.perf_counter() - t0) * 1000, 1))
+    pool = engine.pool
+    return {
+        "round_trip_ms": samples,
+        "median_ms": sorted(samples)[len(samples) // 2],
+        "pool_size": getattr(pool, "size", lambda: None)(),
+        "checked_out": getattr(pool, "checkedout", lambda: None)(),
+        "overflow": getattr(pool, "overflow", lambda: None)(),
     }
