@@ -20,9 +20,19 @@ _is_sqlite = settings.database_url.startswith("sqlite")
 # "server closed the connection unexpectedly" failure that hits any pooled
 # app whose database or proxy times out idle connections -- which is exactly
 # what a classroom does between lessons.
+# Deliberately small. Supabase's pooler caps how many connections a project
+# may hold, and asking for more than it grants surfaces as an intermittent
+# 500 under burst -- about 5% of joins failed at 15+ connections while the
+# rest completed in 1.4s, which is the signature of being refused a
+# connection rather than being slow.
+#
+# Few connections is fine now that a query costs ~11ms: fifteen of them serve
+# well over a thousand queries a second. When they are all busy, SQLAlchemy
+# queues the caller for up to pool_timeout instead of failing -- a student
+# waiting an extra moment beats a student seeing an error.
 _pool_options = {} if _is_sqlite else {
-    "pool_size": 10,
-    "max_overflow": 20,
+    "pool_size": 5,
+    "max_overflow": 10,
     "pool_pre_ping": True,
     "pool_recycle": 1800,
     "pool_timeout": 30,

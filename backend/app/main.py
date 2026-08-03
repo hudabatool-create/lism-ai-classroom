@@ -84,6 +84,16 @@ def health_db():
 
     from urllib.parse import urlsplit
 
+    # Surface the reason a connection failed rather than a bare 500. Under
+    # burst this is the difference between "the pool is exhausted" and "the
+    # database refused us", which need opposite fixes.
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        connect_error = None
+    except Exception as exc:
+        connect_error = f"{type(exc).__name__}: {exc}"[:300]
+
     samples = []
     for _ in range(5):
         t0 = time.perf_counter()
@@ -103,6 +113,7 @@ def health_db():
     return {
         "db_host": host,
         "db_region": region,
+        "connect_error": connect_error,
         # Where this container runs. The database needs to be near THIS, not
         # near the school: users pay one round trip to reach the app, but the
         # app pays one to the database for every query in the request.
