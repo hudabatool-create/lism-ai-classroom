@@ -103,6 +103,10 @@ def health_db():
     return {
         "db_host": host,
         "db_region": region,
+        # Where this container runs. The database needs to be near THIS, not
+        # near the school: users pay one round trip to reach the app, but the
+        # app pays one to the database for every query in the request.
+        "app_region": os.getenv("RAILWAY_REPLICA_REGION") or os.getenv("RAILWAY_REGION") or "unknown",
         "round_trip_ms": samples,
         "median_ms": sorted(samples)[len(samples) // 2],
         "pool_size": getattr(pool, "size", lambda: None)(),
