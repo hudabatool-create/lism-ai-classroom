@@ -346,6 +346,16 @@ show "Waiting for your teacher…". The teacher's dashboard lists every stage an
 starts them one at a time. Never reveal a later section before its start_stage
 arrives, and never advance on your own.
 
+TURN THE STUDENT'S OWN NAVIGATION OFF INSIDE LISM. Next/Previous buttons, arrow keys, clickable
+progress dots and swipe gestures exist ONLY for the file opened on its own. The moment you detect
+LISM (window.parent !== window and not ?preview=1), REMOVE them from the page -- hidden, not merely
+disabled. Nothing inside the activity may change which section is showing; only a start_stage
+command from the teacher does that. ?preview=1 is the exception and keeps full navigation.
+
+KEEP THE BOTTOM-RIGHT CORNER CLEAR -- LISM overlays its own student controls there. Do not place
+buttons or floating elements in the bottom 90px of the viewport when LISM is present.
+
+
 EDUCATIONAL QUALITY REQUIREMENTS (mandatory — these decide whether the activity is usable in a real classroom):
 
 Every question must be about THIS topic's actual content. A question that would still make sense

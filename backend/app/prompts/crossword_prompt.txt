@@ -117,6 +117,16 @@ B. Detect LISM with `window.parent !== window`. When it is absent, run normally 
 C. STUDENTS MUST SEE ONLY THE SECTION THE TEACHER HAS STARTED. Hide every other section until its
    start_stage arrives. Never auto-advance, and never reveal a later section early.
 
+TURN THE STUDENT'S OWN NAVIGATION OFF INSIDE LISM. Next/Previous buttons, arrow keys, clickable
+progress dots and swipe gestures exist ONLY for the file opened on its own. The moment you detect
+LISM (window.parent !== window and not ?preview=1), REMOVE them from the page -- hidden, not merely
+disabled. Nothing inside the activity may change which section is showing; only a start_stage
+command from the teacher does that. ?preview=1 is the exception and keeps full navigation.
+
+KEEP THE BOTTOM-RIGHT CORNER CLEAR -- LISM overlays its own student controls there. Do not place
+buttons or floating elements in the bottom 90px of the viewport when LISM is present.
+
+
 D. NO TIMERS OF YOUR OWN. No countdowns, clocks, progress rings, or time-based locking or advancing.
    The recommended duration is metadata in the manifest and may be printed as text beside a section
    title. LISM shows the one synchronised countdown.

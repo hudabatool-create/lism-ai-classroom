@@ -571,19 +571,25 @@ export default function JoinPage() {
         className="flex-1 border-0"
       />
 
+      {/* A strip of our own, below the activity rather than floating over it.
+          These used to sit on top of the iframe's bottom-right corner, which
+          is exactly where an activity puts its own controls -- students
+          reported the buttons being unreachable underneath ours. Giving them
+          their own row means they can never cover the activity, whatever it
+          decides to draw down there. */}
       {!locked && !coachOpen && (
-        <div className="fixed bottom-4 right-4 flex flex-col items-end gap-2">
-          <button
-            onClick={() => setCoachOpen(true)}
-            className="rounded-full bg-brand-600 px-4 py-3 text-sm font-semibold text-white shadow-lg hover:bg-brand-700"
-          >
-            AI Learning Coach
-          </button>
+        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-slate-200 bg-white px-3 py-2 dark:border-slate-800 dark:bg-slate-900">
           <button
             onClick={handleNeedHelp}
-            className="rounded-full bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-lg hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600"
+            className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600"
           >
             {helpSent ? "Your teacher has been notified" : "Need help?"}
+          </button>
+          <button
+            onClick={() => setCoachOpen(true)}
+            className="rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-brand-700"
+          >
+            AI Learning Coach
           </button>
         </div>
       )}

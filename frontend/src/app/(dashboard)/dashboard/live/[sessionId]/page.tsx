@@ -544,6 +544,18 @@ export default function LiveSessionPage() {
                   }`}
                 >
                   {index + 1}. {stage.label}
+                  {/* The activity's own recommended duration, so the teacher
+                      can see what timing the lesson was written for before
+                      they start it -- and notice when a file declares nothing
+                      and falls back to the 10-minute default. */}
+                  {stage.durationSeconds ? (
+                    <span className="ml-1.5 font-normal opacity-60">
+                      {Math.round(stage.durationSeconds / 60)}m
+                    </span>
+                  ) : null}
+                  {stage.marks ? (
+                    <span className="ml-1.5 font-normal opacity-60">&middot; {stage.marks} marks</span>
+                  ) : null}
                 </li>
               );
             })}
