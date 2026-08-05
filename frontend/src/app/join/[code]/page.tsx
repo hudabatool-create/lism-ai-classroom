@@ -126,6 +126,13 @@ export default function JoinPage() {
   const [warning, setWarning] = useState<string | null>(null);
   const [locked, setLocked] = useState<string | null>(null);
   const [paused, setPaused] = useState(false);
+  // Whether a stage is currently running. LISM cannot reach inside the
+  // activity's iframe to disable its buttons -- it is served from a different
+  // origin -- so asking the activity to behave is the only lever we have, and
+  // an activity that ignores us leaves students free to click through the
+  // whole lesson. Covering the iframe with our own layer is the one thing
+  // that works no matter what the activity does.
+  const [stageActive, setStageActive] = useState(false);
   const [reconnected, setReconnected] = useState(false);
   const [submittedCount, setSubmittedCount] = useState(0);
   const [report, setReport] = useState<StudentReport | null>(null);
@@ -178,6 +185,11 @@ export default function JoinPage() {
           duration: data.session.stage_duration_seconds,
           status: data.session.stage_status,
         });
+        // A student joining mid-lesson must land in the same state as everyone
+        // else -- blocked if the class is between stages, not free to roam.
+        setStageActive(
+          data.session.stage_status === "running" || data.session.stage_status === "paused"
+        );
 
         // Reconnect silently if this device already joined this session.
         // Without this a refresh or a dropped connection sends the student
@@ -318,10 +330,12 @@ export default function JoinPage() {
       if (msg.type === "stage_started") {
         currentStageRef.current = msg.stage;
         setPaused(false);
+        setStageActive(true);
         setTimer({ startedAt: msg.startedAt, duration: msg.durationSeconds, status: "running" });
         sendCommand("start_stage", { stage: msg.stage });
       } else if (msg.type === "stage_ended") {
         setPaused(false);
+        setStageActive(false);
         setTimer((t) => ({ ...t, status: "ended" }));
         sendCommand("stage_ended");
       } else if (msg.type === "timer_extended") {
@@ -338,6 +352,7 @@ export default function JoinPage() {
         setTimer({ startedAt: msg.startedAt, duration: msg.durationSeconds, status: "running" });
         sendCommand("resume");
       } else if (msg.type === "session_ended") {
+        setStageActive(false);
         // The lesson is over: show the student their report before they
         // leave, rather than leaving them on a frozen activity.
         setTimer((t) => ({ ...t, status: "ended" }));
@@ -711,6 +726,29 @@ export default function JoinPage() {
 
             <p className="mt-5 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-300">
               {report.teacher_review_message}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Between stages -- and before the first one -- the activity is covered
+          entirely. This is the only enforcement that holds: the iframe is a
+          different origin, so LISM cannot disable an activity's own Next
+          button, and an activity that ignores start_stage would otherwise let
+          a student read and answer the whole lesson before the teacher has
+          begun. Sits under paused and locked so a stricter state always wins. */}
+      {!stageActive && !paused && !locked && !report && (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-950/95 px-6 text-center">
+          <div className="max-w-md">
+            <Logo size="sm" />
+            <p className="mt-6 text-lg font-semibold text-white">Waiting for your teacher</p>
+            <p className="mt-3 text-sm text-slate-300">
+              {timer.status === "ended"
+                ? "That section is finished. Your teacher will start the next one shortly."
+                : "The lesson will appear here as soon as your teacher starts the first section."}
+            </p>
+            <p className="mt-4 text-xs text-slate-500">
+              You&apos;re connected. Nothing else to do — just wait.
             </p>
           </div>
         </div>
