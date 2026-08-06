@@ -189,6 +189,66 @@ check("still reverts the activity moving itself",
 lock3?.destroy();
 dom3.window.CSSStyleDeclaration.prototype.setProperty = realSetProperty;
 
+// ---------------------------------------------------------------------------
+// An activity already uploaded before stages recorded which section they are.
+//
+// Its stage ids ("starter") appear nowhere in the document (whose ids are
+// "sec-3"), and its opening section was never recognised, so the stage list is
+// one shorter than the document. Falling straight to position put the whole
+// class a section behind: the header read "Section 3 - Starter" while the page
+// showed Section 2, with Section 3's clock running.
+//
+// Matching the heading fixes those lessons where they stand -- no re-upload.
+// ---------------------------------------------------------------------------
+const WORKSHEET = `<!DOCTYPE html><html><head><style>
+  section.card { display: block; }
+</style></head><body><div class="container">
+  <header class="sticky-header"><div class="jump-menu">
+    <a href="#sec-1" class="jump-chip">1. Header</a>
+    <a href="#sec-3" class="jump-chip">3. Starter</a>
+  </div></header>
+  <section class="card" id="sec-1"><h2 class="section-title">Section 1 &middot; Worksheet Details</h2></section>
+  <section class="card" id="sec-2"><h2 class="section-title">Section 2 &middot; Keywords &amp; Objectives</h2></section>
+  <section class="card starter-card" id="sec-3"><h2 class="section-title">Section 3 &middot; Starter / Retrieval</h2></section>
+  <section class="card" id="sec-4"><h2 class="section-title">Section 4 &middot; Knowledge Box</h2></section>
+</div></body></html>`;
+
+const dom4 = new JSDOM(WORKSHEET, { pretendToBeVisual: true });
+const doc4 = dom4.window.document;
+global.MutationObserver = dom4.window.MutationObserver;
+
+const lock4 = installLockstep(doc4);
+const onScreen = () =>
+  [...doc4.querySelectorAll("section.card")]
+    .filter((s) => s.style.display !== "none")
+    .map((s) => s.id)
+    .join(",");
+
+// The old stage list: no anchors, and Section 1 missing, so "starter" is at
+// index 1 while its section is the third in the document.
+lock4?.showStage("starter", 1, "Section 3 · Starter / Retrieval");
+check("an id that isn't in the document still finds the right section",
+  onScreen() === "sec-3", `student is on ${onScreen()}`);
+
+lock4?.showStage("main-teaching", 2, "Section 4 · Knowledge Box & Worked Example");
+check("a longer stage label still matches its section",
+  onScreen() === "sec-4", `student is on ${onScreen()}`);
+
+lock4?.showStage("keywords", 0, "Section 2 · Keywords & Objectives");
+check("the section before the missing one is right too",
+  onScreen() === "sec-2", `student is on ${onScreen()}`);
+
+check("the worksheet's jump menu is hidden from students",
+  doc4.querySelector(".jump-menu").style.display === "none",
+  "it names every section the teacher hasn't started yet");
+
+// Position must still work when there is nothing better to go on.
+lock4?.showStage("unknown-id", 3, "Nothing Like This Heading");
+check("falls back to position when neither id nor heading matches",
+  onScreen() === "sec-4", `student is on ${onScreen()}`);
+
+lock4?.destroy();
+
 const passed2 = results.filter(Boolean).length;
 console.log(`\nTOTAL ${passed2} passed, ${results.length - passed2} failed`);
 process.exit(results.every(Boolean) ? 0 : 1);

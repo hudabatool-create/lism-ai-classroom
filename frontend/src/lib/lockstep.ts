@@ -28,6 +28,10 @@ const NAV_SELECTORS = [
   "[data-nav]", "[data-next]", "[data-prev]",
   ".next", ".prev", ".previous", ".nav-next", ".nav-prev",
   ".slide-nav", ".navigation", ".dots", ".progress-dots", ".slide-counter",
+  // Worksheets print a contents strip -- "1. Header  2. Objectives  3. Starter"
+  // -- along the top. It is navigation like any other: it names every section
+  // the teacher has not started yet and invites a student to go there.
+  ".jump-menu", ".jump-chip", ".jump-nav", ".section-nav", ".toc", ".table-of-contents",
 ].join(",");
 
 /**
@@ -98,9 +102,24 @@ const OBSERVE_OPTIONS: MutationObserverInit = {
 const WATCHDOG_DELAY_MS = 50;
 
 export interface LockstepHandle {
-  /** Show only this stage. Pass null to hide everything. */
-  showStage: (stageId: string | null, index: number) => void;
+  /**
+   * Show only this stage. Pass null to hide everything.
+   *
+   * @param stageId the stage's anchor or id, matched against the section's
+   *                own data-stage/id
+   * @param index   position in the stage list -- the last resort
+   * @param label   the stage's heading as the teacher sees it, matched against
+   *                the section headings when the id does not exist in the
+   *                document (which is every activity whose stages were
+   *                recovered before anchors were recorded)
+   */
+  showStage: (stageId: string | null, index: number, label?: string) => void;
   destroy: () => void;
+}
+
+/** Compare headings the way a person would: ignore case, punctuation, spacing. */
+function normalize(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
 /**
@@ -114,6 +133,12 @@ export function installLockstep(doc: Document): LockstepHandle | null {
   let currentIndex = -1;
 
   const stageIdOf = (el: HTMLElement) => el.dataset.stage ?? el.id ?? "";
+
+  /** The section's own heading, which is what the teacher's stage list shows. */
+  const headingOf = (el: HTMLElement) =>
+    normalize(el.querySelector("h1, h2, h3, h4")?.textContent ?? "");
+
+  const headings = sections.map(headingOf);
 
   /**
    * Most decks show one slide with a class -- .active, .current, .show -- and
@@ -238,11 +263,37 @@ export function installLockstep(doc: Document): LockstepHandle | null {
   observer.observe(doc.body, OBSERVE_OPTIONS);
 
   return {
-    showStage(stageId, index) {
-      // Match on the declared id first; fall back to position, so an activity
-      // whose ids do not match the manifest still moves in step.
+    showStage(stageId, index, label) {
+      // Three ways to find the section, best evidence first.
+      //
+      // Position used to be the immediate fallback, and it is the one that
+      // can be confidently, silently wrong: it only holds while the stage
+      // list and the document agree on how many sections exist. When a
+      // worksheet's opening section was missing from the list, every stage
+      // landed a section early -- the class read the Starter while the
+      // teacher's ten-minute Knowledge Box clock ran.
+      //
+      // Matching the heading closes that gap without anyone re-uploading
+      // anything: the teacher's stage list is built from these very headings,
+      // so "Section 3 - Starter / Retrieval" finds its own section whatever
+      // the ids happen to be.
       const byId = stageId ? sections.findIndex((el) => stageIdOf(el) === stageId) : -1;
-      currentIndex = byId >= 0 ? byId : Math.min(index, sections.length - 1);
+
+      let byHeading = -1;
+      const wanted = normalize(label ?? "");
+      if (byId < 0 && wanted.length >= 4) {
+        byHeading = headings.findIndex((h) => h === wanted);
+        if (byHeading < 0) {
+          // A label truncated for the teacher's list still identifies its
+          // section. Length-guarded so a short word cannot match everything.
+          byHeading = headings.findIndex(
+            (h) => h.length >= 4 && (h.startsWith(wanted) || wanted.startsWith(h))
+          );
+        }
+      }
+
+      const matched = byId >= 0 ? byId : byHeading;
+      currentIndex = matched >= 0 ? matched : Math.min(index, sections.length - 1);
       if (stageId === null) currentIndex = -1;
       apply();
     },

@@ -302,7 +302,11 @@ export default function JoinPage() {
     // No stage running means show nothing -- the waiting overlay covers the
     // screen anyway, but leaving a slide visible underneath invites a student
     // to read ahead through it.
-    lockstepRef.current?.showStage(stageStartedRef.current ? target : null, index);
+    lockstepRef.current?.showStage(
+      stageStartedRef.current ? target : null,
+      index,
+      stage?.label
+    );
   }, [info]);
 
   useEffect(() => {
