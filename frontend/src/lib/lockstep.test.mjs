@@ -95,6 +95,52 @@ check("no recognisable sections -> does nothing", installLockstep(plain.window.d
   "better to leave an activity working than to blank it");
 
 lock.destroy();
-const passed = results.filter(Boolean).length;
-console.log(`\n${passed} passed, ${results.length - passed} failed`);
+
+
+/* ---------------------------------------------------------------------
+   The shape that was actually failing in the classroom: slides are DIVS
+   inside a wrapper, with no data-stage, shown via an .active class and
+   hidden by the deck's own stylesheet. The first version found no slides
+   here at all and silently enforced nothing.
+   --------------------------------------------------------------------- */
+const REAL = `<!DOCTYPE html><html><head><style>
+  .slide { display: none; }
+  .slide.active { display: block; }
+</style></head><body>
+  <div class="deck">
+    <div class="slide active" id="slide-1"><h2>Title</h2></div>
+    <div class="slide" id="slide-2"><h2>Starter</h2></div>
+    <div class="slide" id="slide-3"><h2>Main Activity</h2></div>
+    <div class="slide" id="slide-4"><h2>Exit Ticket</h2></div>
+  </div>
+  <div class="slide-nav"><button class="next">Next</button></div>
+</body></html>`;
+
+const dom2 = new JSDOM(REAL, { pretendToBeVisual: true });
+const doc2 = dom2.window.document;
+global.MutationObserver = dom2.window.MutationObserver;
+
+const lock2 = installLockstep(doc2);
+check("finds div slides inside a wrapper", lock2 !== null,
+  "this is the shape that silently failed before");
+
+const shown = () =>
+  [...doc2.querySelectorAll(".slide")]
+    .filter((s) => s.classList.contains("active") && s.style.display !== "none")
+    .map((s) => s.id);
+
+lock2?.showStage(null, 2);          // teacher on slide 3, matched by index
+lock2?.showStage("slide-3", 2);
+check("moves the deck's own active class", JSON.stringify(shown()) === '["slide-3"]', `shown: ${shown()}`);
+check("the deck's original slide is no longer active",
+  doc2.querySelector("#slide-1").classList.contains("active") === false);
+check("Next button hidden in the real shape",
+  doc2.querySelector(".next").style.display === "none");
+
+lock2?.showStage(null, -1);
+check("nothing shown between stages", shown().length === 0, `shown: ${shown()}`);
+lock2?.destroy();
+
+const passed2 = results.filter(Boolean).length;
+console.log(`\nTOTAL ${passed2} passed, ${results.length - passed2} failed`);
 process.exit(results.every(Boolean) ? 0 : 1);

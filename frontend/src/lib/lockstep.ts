@@ -30,7 +30,61 @@ const NAV_SELECTORS = [
   ".slide-nav", ".navigation", ".dots", ".progress-dots", ".slide-counter",
 ].join(",");
 
-const SECTION_SELECTORS = "[data-stage]";
+/**
+ * How to find an activity's slides, best evidence first.
+ *
+ * The first version only looked for [data-stage] or a direct <section> child
+ * of <body>, and found nothing in a real deck -- whose slides were divs inside
+ * a wrapper. Finding no slides meant enforcing nothing, silently, which is the
+ * worst possible failure: it looks like the feature simply does not work.
+ */
+const SECTION_STRATEGIES = [
+  "[data-stage]",
+  "[data-slide]",
+  ".slide:not(.slide-nav):not(.slide-counter)",
+  "section.slide, div.slide, article.slide",
+  "[id^='slide']",
+  "[id^='section-']",
+  "[id^='stage-']",
+  "section",
+  ".step, .panel, .screen, .page",
+];
+
+/**
+ * Slides are siblings. Grouping candidates by parent and taking the biggest
+ * group avoids picking up a stray <section> in a footer, or nested elements
+ * that happen to match, which would hide half the real slide.
+ */
+function findSlides(doc: Document): HTMLElement[] {
+  for (const selector of SECTION_STRATEGIES) {
+    let matches: HTMLElement[];
+    try {
+      matches = Array.from(doc.querySelectorAll<HTMLElement>(selector));
+    } catch {
+      continue; // selector unsupported in this browser
+    }
+    if (matches.length < 2) continue;
+
+    const byParent = new Map<Element, HTMLElement[]>();
+    for (const el of matches) {
+      const parent = el.parentElement;
+      if (!parent) continue;
+      const group = byParent.get(parent) ?? [];
+      group.push(el);
+      byParent.set(parent, group);
+    }
+
+    let best: HTMLElement[] = [];
+    for (const group of byParent.values()) {
+      if (group.length > best.length) best = group;
+    }
+    // Two siblings could be a header and a footer; three of a kind is a deck.
+    // [data-stage] is explicit enough to trust at two.
+    const enough = selector.startsWith("[data-") ? 2 : 3;
+    if (best.length >= enough) return best;
+  }
+  return [];
+}
 
 export interface LockstepHandle {
   /** Show only this stage. Pass null to hide everything. */
@@ -43,29 +97,46 @@ export interface LockstepHandle {
  * @returns a handle, or null when the activity has no sections we recognise
  */
 export function installLockstep(doc: Document): LockstepHandle | null {
-  const explicit = Array.from(doc.querySelectorAll<HTMLElement>(SECTION_SELECTORS));
-
-  // Fall back to top-level sections for activities that never declared stages
-  // -- the same guess stage-recovery makes on the server.
-  const sections = explicit.length
-    ? explicit
-    : Array.from(doc.body?.querySelectorAll<HTMLElement>(":scope > section") ?? []);
-
+  const sections = findSlides(doc);
   if (sections.length < 2) return null;
 
   let currentIndex = -1;
 
   const stageIdOf = (el: HTMLElement) => el.dataset.stage ?? el.id ?? "";
 
+  /**
+   * Most decks show one slide with a class -- .active, .current, .show -- and
+   * hide the rest in their own stylesheet. Un-hiding an element is therefore
+   * not enough: the deck's CSS still hides it, and the student sees a blank
+   * screen or the deck's own idea of the current slide, neither of which is
+   * the teacher's stage. So we move the deck's class as well as the display.
+   */
+  const ACTIVE_CLASSES = ["active", "current", "show", "visible", "is-active", "selected"];
+  const activeClass = (() => {
+    for (const name of ACTIVE_CLASSES) {
+      const count = sections.filter((el) => el.classList.contains(name)).length;
+      if (count === 1) return name;   // exactly one slide has it: that's the convention
+    }
+    return null;
+  })();
+
   function apply() {
     sections.forEach((el, i) => {
       const shouldShow = i === currentIndex;
-      // setProperty with "important" so an activity's own stylesheet or
-      // inline style cannot win the fight and reveal a later slide.
       if (shouldShow) {
-        el.style.removeProperty("display");
+        if (activeClass) el.classList.add(activeClass);
         el.removeAttribute("aria-hidden");
+        el.style.removeProperty("display");
+        // If the deck's own CSS still hides it, override -- but keep whatever
+        // layout mode it wanted (flex, grid) rather than forcing block.
+        const computed = el.ownerDocument.defaultView?.getComputedStyle(el);
+        if (!computed || computed.display === "none") {
+          el.style.setProperty("display", el.dataset.lismDisplay || "block", "important");
+        }
+        el.style.setProperty("visibility", "visible", "important");
+        el.style.removeProperty("opacity");
       } else {
+        if (activeClass) el.classList.remove(activeClass);
         el.style.setProperty("display", "none", "important");
         el.setAttribute("aria-hidden", "true");
       }
