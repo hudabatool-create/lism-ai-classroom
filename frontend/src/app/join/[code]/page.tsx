@@ -871,6 +871,18 @@ export default function JoinPage() {
             <p className="mt-4 text-xs text-slate-500">
               You&apos;re connected. Nothing else to do — just wait.
             </p>
+            {/* Add ?debug=1 to the join URL to see why this screen is showing.
+                Invisible to students, and the difference between diagnosing
+                this in one message and guessing at it for another round. */}
+            {typeof window !== "undefined" && window.location.search.includes("debug=1") && (
+              <p className="mt-6 font-mono text-[11px] leading-5 text-slate-600">
+                code={code} · status={timer.status} · stageActive={String(stageActive)}
+                <br />
+                stage={currentStageRef.current?.id ?? "none"} · student={studentId ? "yes" : "no"}
+                <br />
+                api={api.base}
+              </p>
+            )}
           </div>
         </div>
       )}
