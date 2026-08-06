@@ -14,6 +14,7 @@ than rejecting them.
 import html as html_lib
 import json
 import re
+from collections import Counter
 from typing import NamedTuple
 
 MANIFEST_PATTERN = re.compile(
@@ -115,6 +116,9 @@ def _normalize_stage(raw: dict, index: int) -> dict:
             or _STAGE_MINUTES.get(stage_id, DEFAULT_STAGE_DURATION_SECONDS // 60) * 60
         ),
         "sequentialLock": bool(raw.get("sequentialLock", True)),
+        # The element this stage lives in, when we know it. Lets the student's
+        # screen be pinned by name rather than by position in the document.
+        "anchor": raw.get("anchor") or "",
         "marks": marks,
         "autoMarks": auto_marks,
         # Marks no machine should award: the teacher's to give, after seeing
@@ -236,6 +240,23 @@ _SECTION_RE = re.compile(
 _HEADING_RE = re.compile(r"<h[1-4][^>]*>(.*?)</h[1-4]>", re.DOTALL | re.IGNORECASE)
 _TAGS_RE = re.compile(r"<[^>]+>")
 _ATTR_RE = re.compile(r'(?:data-stage|id|class)\s*=\s*["\']([^"\']+)["\']', re.IGNORECASE)
+# The section's own handle in the document, which is how the student's screen
+# is pinned to exactly the right section rather than counting positions.
+_ANCHOR_RE = re.compile(r'data-stage\s*=\s*["\']([^"\']+)["\']', re.IGNORECASE)
+_ID_RE = re.compile(r'\bid\s*=\s*["\']([^"\']+)["\']', re.IGNORECASE)
+_CLASS_RE = re.compile(r'\bclass\s*=\s*["\']([^"\']+)["\']', re.IGNORECASE)
+
+
+class _Block(NamedTuple):
+    """One candidate section, before we decide whether it becomes a stage."""
+
+    tag: str
+    markers: str
+    classes: frozenset[str]
+    anchor: str
+    heading: str
+    inner: str
+    entry: _StagePattern | None
 
 
 def _match_stage(*texts: str) -> _StagePattern | None:
@@ -307,24 +328,89 @@ def infer_stages_from_html(html: str) -> list[dict]:
     is preserved. Returns [] when nothing recognisable is found, so the caller
     keeps the honest single-stage fallback.
     """
+    blocks: list[_Block] = []
+    for tag, attrs, inner in _SECTION_RE.findall(html):
+        markers = " ".join(_ATTR_RE.findall(attrs))
+        heading_html = _HEADING_RE.search(inner)
+        heading = _TAGS_RE.sub(" ", heading_html.group(1)) if heading_html else ""
+        class_match = _CLASS_RE.search(attrs)
+        anchor_match = _ANCHOR_RE.search(attrs) or _ID_RE.search(attrs)
+        blocks.append(
+            _Block(
+                tag=tag.lower(),
+                markers=markers,
+                classes=frozenset((class_match.group(1) if class_match else "").split()),
+                anchor=anchor_match.group(1) if anchor_match else "",
+                heading=heading,
+                inner=inner,
+                entry=_match_stage(markers, heading),
+            )
+        )
+
+    # A section we don't recognise is still a section.
+    #
+    # Recovery used to keep only sections whose heading matched a known name,
+    # and drop the rest without a word. A worksheet opening with "Section 1 -
+    # Worksheet Details" lost that section entirely: students never saw it, and
+    # worse, the stage list no longer lined up with the document, so the class
+    # ran a whole lesson one section behind -- the teacher started Section 4 on
+    # a ten-minute clock while every student sat looking at the Starter.
+    #
+    # So once an activity has shown us what its sections look like, take its
+    # unrecognised siblings too. A peer is the same tag, carrying the same
+    # class the recognised sections share, and headed like them. That is
+    # specific enough to exclude layout wrappers -- which have no heading --
+    # while never again silently losing part of a lesson.
+    recognised = [b for b in blocks if b.entry]
+    peer_tag = recognised[0].tag if recognised else ""
+    class_counts: Counter[str] = Counter(c for b in recognised for c in b.classes)
+    peer_classes = {c for c, n in class_counts.items() if n >= 2}
+
+    def is_peer(block: _Block) -> bool:
+        return (
+            block.entry is None
+            and bool(peer_classes)
+            and block.tag == peer_tag
+            and bool(block.classes & peer_classes)
+            and bool(block.heading.strip())
+        )
+
     found: list[dict] = []
     seen_single: set[str] = set()
     counters: dict[str, int] = {}
     seen_signatures: set[str] = set()
+    used_ids: set[str] = set()
 
-    for _tag, attrs, inner in _SECTION_RE.findall(html):
-        markers = " ".join(_ATTR_RE.findall(attrs))
-        heading_html = _HEADING_RE.search(inner)
-        heading = _TAGS_RE.sub(" ", heading_html.group(1)) if heading_html else ""
-        entry = _match_stage(markers, heading)
-        if not entry:
+    for position, block in enumerate(blocks):
+        entry, inner, markers = block.entry, block.inner, block.markers
+        if not entry and not is_peer(block):
             continue
 
         # Prefer the activity's own heading -- "Starter / Retrieval" is more
         # useful to the teacher than our generic label.
         # Unescape so a heading reads "Keywords & Objective" on the teacher's
         # stage list, not "Keywords &amp; Objective".
-        clean_heading = _clean_label(html_lib.unescape(heading), "")[:60]
+        clean_heading = _clean_label(html_lib.unescape(block.heading), "")[:60]
+
+        if entry is None:
+            # An unrecognised peer: named by its own heading, timed by whatever
+            # it says out loud, and worth no marks we would have to invent.
+            stage_id = block.anchor or f"section-{position}"
+            if stage_id in used_ids:
+                continue
+            used_ids.add(stage_id)
+            found.append(
+                {
+                    "id": stage_id,
+                    "label": clean_heading or f"Section {len(found) + 1}",
+                    "type": "section",
+                    "durationSeconds": _recovered_duration(stage_id, inner),
+                    "sequentialLock": True,
+                    "marks": None,
+                    "anchor": block.anchor,
+                }
+            )
+            continue
 
         if entry.repeatable:
             # Nested markup can surface the same block twice (an outer section
@@ -346,6 +432,7 @@ def infer_stages_from_html(html: str) -> list[dict]:
             stage_id = entry.id
             label = clean_heading or entry.label
 
+        used_ids.add(stage_id)
         found.append(
             {
                 "id": stage_id,
@@ -354,6 +441,11 @@ def infer_stages_from_html(html: str) -> list[dict]:
                 "durationSeconds": _recovered_duration(stage_id, inner),
                 "sequentialLock": True,
                 "marks": 10 if stage_id == "main-activity" else None,
+                # Which element in the document this stage is. Carried so the
+                # student's screen can be pinned to the right section by name
+                # instead of by counting -- counting is what broke a whole
+                # lesson the moment one section was not recognised.
+                "anchor": block.anchor,
             }
         )
 

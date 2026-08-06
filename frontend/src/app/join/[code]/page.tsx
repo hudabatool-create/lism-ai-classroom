@@ -294,10 +294,15 @@ export default function JoinPage() {
     const stage = currentStageRef.current;
     const stages = info?.activity.manifest.stages ?? [];
     const index = stage ? stages.findIndex((s) => s.id === stage.id) : -1;
+    // Name the section outright when the stage knows which one it is. Position
+    // is the last resort: it is only ever right while the stage list and the
+    // document agree on how many sections exist, and when they disagreed the
+    // whole class sat one section behind the teacher for an entire lesson.
+    const target = stage ? stage.anchor || stage.id : null;
     // No stage running means show nothing -- the waiting overlay covers the
     // screen anyway, but leaving a slide visible underneath invites a student
     // to read ahead through it.
-    lockstepRef.current?.showStage(stageStartedRef.current ? (stage?.id ?? null) : null, index);
+    lockstepRef.current?.showStage(stageStartedRef.current ? target : null, index);
   }, [info]);
 
   useEffect(() => {

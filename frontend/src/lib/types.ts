@@ -24,6 +24,14 @@ export interface Stage {
   type: string;
   durationSeconds: number;
   sequentialLock: boolean;
+  /**
+   * The id or data-stage of the element this stage lives in, when the section
+   * was recovered from the activity's own HTML. Lets the student's screen be
+   * pinned to the right section by name instead of by counting position --
+   * counting silently ran a whole class a section behind whenever the stage
+   * list and the document disagreed on how many sections there are.
+   */
+  anchor?: string;
   /** Total the stage is worth. null when it is deliberately unmarked. */
   marks: number | null;
   /** The portion the activity can score itself; the rest is the teacher's. */
