@@ -11,7 +11,19 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     headers.set("Content-Type", "application/json");
   }
 
-  const res = await fetch(`${API_BASE_URL}${path}`, { ...options, headers, credentials: "include" });
+  // Never serve an API response from the browser cache.
+  //
+  // Nothing here sent cache headers, so browsers applied their own heuristics
+  // and happily replayed an old response. On the student page that was fatal:
+  // it polls the live session state, and a cached copy meant it was told
+  // "no stage running" for the entire lesson, however many times it asked.
+  // Only rejoining worked, because that is a POST and POSTs are never cached.
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers,
+    credentials: "include",
+    cache: "no-store",
+  });
   if (!res.ok) {
     let detail = res.statusText;
     try {

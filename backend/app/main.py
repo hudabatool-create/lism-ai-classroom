@@ -32,6 +32,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.middleware("http")
+async def no_store(request, call_next):
+    """Nothing this API returns is safe to cache.
+
+    Every response describes right now -- which stage is running, who has
+    joined, what has been answered. Sending no cache headers left browsers to
+    guess, and they guessed wrong: a student's page polled for the current
+    stage and was handed the same stale "nothing running" answer from cache
+    for the whole lesson, so the screen never left "Waiting for your teacher".
+    Rejoining fixed it only because that is a POST, which is never cached.
+    """
+    response = await call_next(request)
+    if request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+    return response
+
+
 app.include_router(auth.router)
 app.include_router(activities.router)
 app.include_router(sessions.router)
