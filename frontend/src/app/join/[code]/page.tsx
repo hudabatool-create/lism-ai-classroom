@@ -134,6 +134,7 @@ export default function JoinPage() {
   // whole lesson. Covering the iframe with our own layer is the one thing
   // that works no matter what the activity does.
   const [stageActive, setStageActive] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const [reconnected, setReconnected] = useState(false);
   const [submittedCount, setSubmittedCount] = useState(0);
   const [report, setReport] = useState<StudentReport | null>(null);
@@ -456,7 +457,23 @@ export default function JoinPage() {
     // Belt and braces: phones suspend sockets silently when the screen locks,
     // and onclose does not always fire. A slow heartbeat and a wake-up check
     // cost almost nothing and turn a stuck lesson into a two-second delay.
-    const heartbeat = setInterval(() => resyncRef.current?.(), 20000);
+    // Poll for the truth rather than trusting that every broadcast arrived.
+    //
+    // The socket demonstrably delivers -- verified against production -- but
+    // students still ended up stranded on the waiting screen, and no amount of
+    // reading the code found why. So the WebSocket is now an optimisation for
+    // instant response, not the thing correctness depends on. Two seconds
+    // while a student is blocked, because that is the moment being wrong is
+    // most expensive; ten once the lesson is moving, since a running stage
+    // only changes when the teacher acts.
+    //
+    // Thirty students polling every two seconds is fifteen requests a second
+    // against a backend that served 320 concurrent joins at 17ms. It is not
+    // elegant, but a child locked out of a lesson is not elegant either.
+    const heartbeat = setInterval(
+      () => resyncRef.current?.(),
+      stageStartedRef.current ? 10000 : 2000
+    );
     const onWake = () => {
       if (document.visibilityState === "visible") resyncRef.current?.();
     };
@@ -470,7 +487,7 @@ export default function JoinPage() {
       ws?.close();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [studentId, code]);
+  }, [studentId, code, stageActive]);
 
 
   /** Re-read the live session state from the server.
@@ -497,8 +514,11 @@ export default function JoinPage() {
       });
       if (running && data.current_stage) sendCommand("start_stage", { stage: data.current_stage });
       applyLockstepRef.current?.();
-    } catch {
-      /* offline for the moment: the next tick tries again */
+      setSyncError(null);
+    } catch (e) {
+      // Was silent, which meant a resync that failed every time looked
+      // identical to one that was never called.
+      setSyncError(e instanceof Error ? e.message : "sync failed");
     }
   }, [studentId, code]);
 
@@ -881,6 +901,8 @@ export default function JoinPage() {
                 stage={currentStageRef.current?.id ?? "none"} · student={studentId ? "yes" : "no"}
                 <br />
                 api={api.base}
+                <br />
+                sync={syncError ?? "ok"}
               </p>
             )}
           </div>
