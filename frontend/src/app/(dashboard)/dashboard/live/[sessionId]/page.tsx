@@ -2,6 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import StagePreview from "@/components/StagePreview";
 import StatCard from "@/components/StatCard";
 import { api } from "@/lib/api";
 import { playTimerSound, TIMER_SOUND_OPTIONS, type TimerSound } from "@/lib/timerSound";
@@ -564,6 +565,15 @@ export default function LiveSessionPage() {
             <p className="mt-3 text-sm font-medium text-green-600">Lesson complete &mdash; all stages finished.</p>
           )}
         </div>
+      )}
+
+      {session.status === "active" && (
+        <StagePreview
+          activityId={activity.id}
+          stage={current_stage}
+          stageIndex={session.current_stage_index}
+          running={session.stage_status === "running" || session.stage_status === "paused"}
+        />
       )}
 
       {session.status === "active" && (
