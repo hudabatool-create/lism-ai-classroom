@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Logo from "@/components/Logo";
 import { api } from "@/lib/api";
+import { installLockstep, type LockstepHandle } from "@/lib/lockstep";
 import { playTimerSound, type TimerSound } from "@/lib/timerSound";
 import type { LessonManifest, SessionType, Stage } from "@/lib/types";
 
@@ -170,6 +171,13 @@ export default function JoinPage() {
   const [coachSending, setCoachSending] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const currentStageRef = useRef<Stage | null>(null);
+  const lockstepRef = useRef<LockstepHandle | null>(null);
+  // Mirrors stageActive for code paths that run outside React's render,
+  // where reading the state variable would give a stale value.
+  const stageStartedRef = useRef(false);
+  // The WebSocket handler is created before applyLockstep exists, so it
+  // calls through this rather than capturing a stale closure.
+  const applyLockstepRef = useRef<(() => void) | null>(null);
   const awayRef = useRef(false);
 
   useEffect(() => {
@@ -187,9 +195,9 @@ export default function JoinPage() {
         });
         // A student joining mid-lesson must land in the same state as everyone
         // else -- blocked if the class is between stages, not free to roam.
-        setStageActive(
-          data.session.stage_status === "running" || data.session.stage_status === "paused"
-        );
+        stageStartedRef.current =
+          data.session.stage_status === "running" || data.session.stage_status === "paused";
+        setStageActive(stageStartedRef.current);
 
         // Reconnect silently if this device already joined this session.
         // Without this a refresh or a dropped connection sends the student
@@ -263,7 +271,38 @@ export default function JoinPage() {
       sendCommand("start_stage", { stage: currentStageRef.current });
     }
     if (info?.session.stage_status === "paused") sendCommand("pause");
+
+    // Then take control rather than rely on the activity having listened.
+    // Served from our own origin, so the document is reachable; wrapped
+    // anyway because a stray cross-origin document must not break the lesson.
+    try {
+      const doc = iframeRef.current?.contentDocument;
+      if (doc) {
+        lockstepRef.current?.destroy();
+        lockstepRef.current = installLockstep(doc);
+        applyLockstep();
+      }
+    } catch {
+      /* not same-origin: fall back to the postMessage contract above */
+    }
   }
+
+  /** Point the activity at whatever stage the teacher has running. */
+  const applyLockstep = useCallback(() => {
+    const stage = currentStageRef.current;
+    const stages = info?.activity.manifest.stages ?? [];
+    const index = stage ? stages.findIndex((s) => s.id === stage.id) : -1;
+    // No stage running means show nothing -- the waiting overlay covers the
+    // screen anyway, but leaving a slide visible underneath invites a student
+    // to read ahead through it.
+    lockstepRef.current?.showStage(stageStartedRef.current ? (stage?.id ?? null) : null, index);
+  }, [info]);
+
+  useEffect(() => {
+    applyLockstepRef.current = applyLockstep;
+  }, [applyLockstep]);
+
+  useEffect(() => () => lockstepRef.current?.destroy(), []);
 
   // The activity's response contract: prefer the new 'lism:event' shape
   // (stage-aware), but also accept the older flat 'lism-activity-response'
@@ -331,11 +370,15 @@ export default function JoinPage() {
         currentStageRef.current = msg.stage;
         setPaused(false);
         setStageActive(true);
+        stageStartedRef.current = true;
+        applyLockstepRef.current?.();
         setTimer({ startedAt: msg.startedAt, duration: msg.durationSeconds, status: "running" });
         sendCommand("start_stage", { stage: msg.stage });
       } else if (msg.type === "stage_ended") {
         setPaused(false);
         setStageActive(false);
+        stageStartedRef.current = false;
+        applyLockstepRef.current?.();
         setTimer((t) => ({ ...t, status: "ended" }));
         sendCommand("stage_ended");
       } else if (msg.type === "timer_extended") {
@@ -353,6 +396,7 @@ export default function JoinPage() {
         sendCommand("resume");
       } else if (msg.type === "session_ended") {
         setStageActive(false);
+        stageStartedRef.current = false;
         // The lesson is over: show the student their report before they
         // leave, rather than leaving them on a frozen activity.
         setTimer((t) => ({ ...t, status: "ended" }));
@@ -582,7 +626,10 @@ export default function JoinPage() {
         ref={iframeRef}
         onLoad={handleIframeLoad}
         title={info.activity.title}
-        src={`${api.base}/api/activities/${info.activity.id}/raw`}
+        // Served through LISM's own origin so lockstep can reach the
+        // document. Pointing straight at the backend would make this
+        // cross-origin and leave us unable to enforce anything.
+        src={`/activity/${info.activity.id}/raw`}
         className="flex-1 border-0"
       />
 
