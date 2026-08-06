@@ -86,6 +86,17 @@ function findSlides(doc: Document): HTMLElement[] {
   return [];
 }
 
+/** What the watchdog listens for -- the ways a deck changes which slide shows. */
+const OBSERVE_OPTIONS: MutationObserverInit = {
+  attributes: true,
+  attributeFilter: ["style", "class", "hidden"],
+  childList: true,
+  subtree: true,
+};
+
+/** Long enough to coalesce a burst of mutations, short enough to feel instant. */
+const WATCHDOG_DELAY_MS = 50;
+
 export interface LockstepHandle {
   /** Show only this stage. Pass null to hide everything. */
   showStage: (stageId: string | null, index: number) => void;
@@ -120,7 +131,35 @@ export function installLockstep(doc: Document): LockstepHandle | null {
     return null;
   })();
 
+  /**
+   * True while apply() is writing, so the watchdog never reacts to us.
+   *
+   * apply() sets style and class -- the very attributes the observer watches.
+   * Left unguarded that is not a loop that eventually settles: observer
+   * callbacks are microtasks, and a microtask that queues another microtask
+   * starves the event loop outright. The tab stops rendering, timers stop
+   * firing and WebSocket messages stop being delivered, so the student sat
+   * frozen on "Waiting for your teacher" while the class moved on, and only a
+   * fresh page load -- rejoining -- ever showed them the right slide.
+   */
+  let applying = false;
+  let observer: MutationObserver | null = null;
+
   function apply() {
+    if (applying) return;
+    applying = true;
+    // Our own writes must not be observed. disconnect() also discards records
+    // already queued, so re-observing below starts from a clean slate.
+    observer?.disconnect();
+    try {
+      write();
+    } finally {
+      observer?.observe(doc.body, OBSERVE_OPTIONS);
+      applying = false;
+    }
+  }
+
+  function write() {
     sections.forEach((el, i) => {
       const shouldShow = i === currentIndex;
       if (shouldShow) {
@@ -182,11 +221,21 @@ export function installLockstep(doc: Document): LockstepHandle | null {
 
   // The watchdog. Whatever the activity does to change slides, this puts it
   // back -- which means we never have to enumerate the ways it might try.
-  const observer = new MutationObserver(() => apply());
-  observer.observe(doc.body, {
-    attributes: true, attributeFilter: ["style", "class", "hidden"],
-    childList: true, subtree: true,
+  //
+  // Re-assertion is deliberately deferred through a timer rather than run
+  // straight from the callback. A timer is a macrotask, so rendering, timers
+  // and socket messages all get their turn between passes: even an activity
+  // that fights back in a loop can only make this slow, never make the tab
+  // unresponsive. The delay also coalesces a burst of mutations into one pass.
+  let pending: ReturnType<typeof setTimeout> | null = null;
+  observer = new MutationObserver(() => {
+    if (applying || pending) return;
+    pending = setTimeout(() => {
+      pending = null;
+      apply();
+    }, WATCHDOG_DELAY_MS);
   });
+  observer.observe(doc.body, OBSERVE_OPTIONS);
 
   return {
     showStage(stageId, index) {
@@ -198,7 +247,9 @@ export function installLockstep(doc: Document): LockstepHandle | null {
       apply();
     },
     destroy() {
-      observer.disconnect();
+      if (pending) clearTimeout(pending);
+      pending = null;
+      observer?.disconnect();
       doc.removeEventListener("keydown", keyGuard, true);
       doc.removeEventListener("touchmove", touchGuard, true);
     },

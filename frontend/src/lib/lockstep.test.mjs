@@ -62,7 +62,9 @@ check("Submit is NOT hidden", doc.querySelector("#submit").style.display !== "no
 // --- the deck tries to move itself; the watchdog must undo it -------------
 const exit = doc.querySelector('[data-stage="exit-ticket"]');
 exit.style.display = "block";
-await new Promise((r) => setTimeout(r, 30));   // let MutationObserver fire
+// The watchdog re-asserts on a timer, not straight from the observer
+// callback, so that it can never starve the event loop. Wait past that delay.
+await new Promise((r) => setTimeout(r, 300));
 check("a slide the deck reveals is snapped back",
   JSON.stringify(visible()) === '["starter"]', `visible: ${visible()}`);
 
@@ -140,6 +142,52 @@ check("Next button hidden in the real shape",
 lock2?.showStage(null, -1);
 check("nothing shown between stages", shown().length === 0, `shown: ${shown()}`);
 lock2?.destroy();
+
+// ---------------------------------------------------------------------------
+// The watchdog must not react to its own writes.
+//
+// It listens for style and class changes; applying a stage writes style and
+// class. Unguarded, each pass triggered the next in an unbroken chain of
+// microtasks, which starves the event loop: the tab stops rendering, timers
+// stop firing and WebSocket messages are never delivered. Students sat frozen
+// on "Waiting for your teacher" for a whole lesson, and rejoining was the only
+// thing that ever moved them on. Nothing server-side could show this, because
+// nothing was wrong server-side.
+// ---------------------------------------------------------------------------
+const dom3 = new JSDOM(REAL, { pretendToBeVisual: true });
+const doc3 = dom3.window.document;
+global.MutationObserver = dom3.window.MutationObserver;
+
+let applyCount = 0;
+const realSetProperty = dom3.window.CSSStyleDeclaration.prototype.setProperty;
+dom3.window.CSSStyleDeclaration.prototype.setProperty = function (...args) {
+  applyCount += 1;
+  return realSetProperty.apply(this, args);
+};
+
+const lock3 = installLockstep(doc3);
+lock3?.showStage("slide-2", 1);
+
+// Let every microtask drain, then every timer the watchdog may have queued.
+await new Promise((r) => setTimeout(r, 400));
+const settled = applyCount;
+await new Promise((r) => setTimeout(r, 400));
+
+check("the watchdog settles instead of looping forever",
+  applyCount === settled, `still writing: ${settled} -> ${applyCount}`);
+check("a stage change costs a bounded number of writes",
+  settled < 100, `${settled} style writes for one showStage call`);
+
+// It must still do its job: an activity that moves itself gets put back.
+doc3.querySelector("#slide-4").style.removeProperty("display");
+doc3.querySelector("#slide-4").classList.add("active");
+await new Promise((r) => setTimeout(r, 300));
+check("still reverts the activity moving itself",
+  doc3.querySelector("#slide-4").style.display === "none",
+  `slide-4 display: "${doc3.querySelector("#slide-4").style.display}"`);
+
+lock3?.destroy();
+dom3.window.CSSStyleDeclaration.prototype.setProperty = realSetProperty;
 
 const passed2 = results.filter(Boolean).length;
 console.log(`\nTOTAL ${passed2} passed, ${results.length - passed2} failed`);

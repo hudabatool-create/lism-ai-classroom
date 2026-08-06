@@ -470,10 +470,19 @@ export default function JoinPage() {
     // Thirty students polling every two seconds is fifteen requests a second
     // against a backend that served 320 concurrent joins at 17ms. It is not
     // elegant, but a child locked out of a lesson is not elegant either.
-    const heartbeat = setInterval(
-      () => resyncRef.current?.(),
-      stageStartedRef.current ? 10000 : 2000
-    );
+    // Fixed 2s tick, with the slower cadence decided per tick from the ref.
+    // Deriving the interval from state instead meant stageActive had to be a
+    // dependency of this effect, which tore down and rebuilt the WebSocket
+    // every single time a stage started or ended -- a reconnect at the exact
+    // moment the student most needs the socket to be up.
+    let ticks = 0;
+    const heartbeat = setInterval(() => {
+      ticks += 1;
+      // Blocked: check every 2s, because that is when being wrong costs most.
+      // Running: every 10s, since a live stage only changes when the teacher acts.
+      if (stageStartedRef.current && ticks % 5 !== 0) return;
+      resyncRef.current?.();
+    }, 2000);
     const onWake = () => {
       if (document.visibilityState === "visible") resyncRef.current?.();
     };
@@ -487,7 +496,7 @@ export default function JoinPage() {
       ws?.close();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [studentId, code, stageActive]);
+  }, [studentId, code]);
 
 
   /** Re-read the live session state from the server.
