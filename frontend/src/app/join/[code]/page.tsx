@@ -178,6 +178,7 @@ export default function JoinPage() {
   // The WebSocket handler is created before applyLockstep exists, so it
   // calls through this rather than capturing a stale closure.
   const applyLockstepRef = useRef<(() => void) | null>(null);
+  const resyncRef = useRef<(() => void) | null>(null);
   const awayRef = useRef(false);
 
   useEffect(() => {
@@ -362,7 +363,27 @@ export default function JoinPage() {
   useEffect(() => {
     if (!studentId) return;
     const wsBase = api.base.replace(/^http/, "ws");
-    const ws = new WebSocket(`${wsBase}/api/ws/session/${code}?student_id=${studentId}`);
+    let ws: WebSocket;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    let closed = false;
+    let attempt = 0;
+
+    const connect = () => {
+      ws = new WebSocket(`${wsBase}/api/ws/session/${code}?student_id=${studentId}`);
+
+      ws.onopen = () => {
+        attempt = 0;
+        // Catch up on anything that happened while this socket was down.
+        resyncRef.current?.();
+      };
+
+      // A dropped socket must come back, or the student is stranded for the
+      // rest of the lesson. Backs off to 8s so a long outage doesn't hammer.
+      ws.onclose = () => {
+        if (closed) return;
+        attempt += 1;
+        retry = setTimeout(connect, Math.min(1000 * attempt, 8000));
+      };
 
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data);
@@ -428,9 +449,62 @@ export default function JoinPage() {
       }
     };
 
-    return () => ws.close();
+        };
+
+    connect();
+
+    // Belt and braces: phones suspend sockets silently when the screen locks,
+    // and onclose does not always fire. A slow heartbeat and a wake-up check
+    // cost almost nothing and turn a stuck lesson into a two-second delay.
+    const heartbeat = setInterval(() => resyncRef.current?.(), 20000);
+    const onWake = () => {
+      if (document.visibilityState === "visible") resyncRef.current?.();
+    };
+    document.addEventListener("visibilitychange", onWake);
+
+    return () => {
+      closed = true;
+      clearTimeout(retry);
+      clearInterval(heartbeat);
+      document.removeEventListener("visibilitychange", onWake);
+      ws?.close();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [studentId, code]);
+
+
+  /** Re-read the live session state from the server.
+   *
+   * WebSocket events are fire-and-forget: a stage_started sent while this
+   * device was still connecting, asleep, or briefly off wifi is gone for
+   * good. Without a resync the student sits behind "Waiting for your teacher"
+   * for the rest of the lesson while the class moves on -- which is exactly
+   * what happened in testing, and why rejoining appeared to fix it.
+   */
+  const resync = useCallback(async () => {
+    if (!studentId) return;
+    try {
+      const data = await api.get<JoinInfo>(`/api/join/${code}`);
+      const running = data.session.stage_status === "running" || data.session.stage_status === "paused";
+      currentStageRef.current = data.current_stage;
+      stageStartedRef.current = running;
+      setStageActive(running);
+      setPaused(data.session.stage_status === "paused");
+      setTimer({
+        startedAt: data.session.stage_started_at,
+        duration: data.session.stage_duration_seconds,
+        status: data.session.stage_status,
+      });
+      if (running && data.current_stage) sendCommand("start_stage", { stage: data.current_stage });
+      applyLockstepRef.current?.();
+    } catch {
+      /* offline for the moment: the next tick tries again */
+    }
+  }, [studentId, code]);
+
+  useEffect(() => {
+    resyncRef.current = resync;
+  }, [resync]);
 
   // Focus Mode: driven by the teacher's focus_monitoring setting, which
   // defaults on for an assessment but is now switchable mid-lesson either

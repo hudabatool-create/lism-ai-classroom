@@ -103,11 +103,17 @@ def _normalize_stage(raw: dict, index: int) -> dict:
     elif auto_marks is not None:
         auto_marks = min(auto_marks, marks)
 
+    stage_id = raw.get("id") or f"stage-{index}"
     return {
-        "id": raw.get("id") or f"stage-{index}",
-        "label": raw.get("label") or f"Stage {index + 1}",
+        "id": stage_id,
+        "label": _clean_label(raw.get("label") or "", f"Stage {index + 1}"),
         "type": raw.get("type") or "activity",
-        "durationSeconds": int(raw.get("durationSeconds") or DEFAULT_STAGE_DURATION_SECONDS),
+        # An activity that declares no duration gets the framework's timing for
+        # that part of the lesson, not one flat default for everything.
+        "durationSeconds": int(
+            raw.get("durationSeconds")
+            or _STAGE_MINUTES.get(stage_id, DEFAULT_STAGE_DURATION_SECONDS // 60) * 60
+        ),
         "sequentialLock": bool(raw.get("sequentialLock", True)),
         "marks": marks,
         "autoMarks": auto_marks,
@@ -240,6 +246,53 @@ def _match_stage(*texts: str) -> _StagePattern | None:
     return None
 
 
+# How long each part of a LISM lesson is meant to take. Used only when the
+# activity did not declare its own durations -- giving every recovered stage
+# the same five minutes made a 50-minute lesson look like a stopwatch drill
+# and told the teacher nothing about the pacing the lesson was written for.
+_STAGE_MINUTES = {
+    "title": 1, "keywords": 2, "objectives": 2,
+    "starter": 5, "main-teaching": 10, "guided-practice": 5,
+    "main-activity": 10, "rubric": 2, "connection": 3,
+    "exit-ticket": 5, "reflection": 2,
+    "scenario": 3, "explore": 5, "observation": 4, "analysis": 5,
+    "problem": 3, "predict": 3, "debug": 5, "write": 8, "tests": 3,
+    "how-to-play": 2, "results": 3, "review": 3, "match": 5, "sort": 4,
+}
+_DEFAULT_STAGE_MINUTES = 5
+
+# "Recommended Duration: 5 minutes", "(3 min)", "10 minutes + feedback"
+_DURATION_RE = re.compile(r"(\d{1,3})\s*(?:minutes?|mins?\b|m\b)", re.IGNORECASE)
+
+
+def _recovered_duration(stage_id: str, section_html: str) -> int:
+    """Seconds for a stage the activity didn't time itself.
+
+    Prefers what the lesson says out loud -- decks built from the LISM prompt
+    print "Recommended Duration: 5 minutes" beside the slide title -- and
+    otherwise falls back to the framework's own shape rather than one flat
+    number for everything.
+    """
+    text = _TAGS_RE.sub(" ", section_html)[:600]
+    match = _DURATION_RE.search(text)
+    if match:
+        minutes = int(match.group(1))
+        if 1 <= minutes <= 60:
+            return minutes * 60
+    return _STAGE_MINUTES.get(stage_id, _DEFAULT_STAGE_MINUTES) * 60
+
+
+# An AI that writes its manifest with a template literal leaves the
+# placeholder behind verbatim -- "${data.d1.title}" is a real label we have
+# seen. Showing that to a teacher is worse than showing nothing.
+_PLACEHOLDER_RE = re.compile(r"\$\{[^}]*\}|\{\{[^}]*\}\}|\[[A-Z][A-Z _-]{2,}\]")
+
+
+def _clean_label(label: str, fallback: str) -> str:
+    cleaned = _PLACEHOLDER_RE.sub("", label or "").strip(" .-–—:·")
+    return " ".join(cleaned.split()) or fallback
+
+
 def infer_stages_from_html(html: str) -> list[dict]:
     """Best-effort lesson stages for HTML with no manifest.
 
@@ -271,7 +324,7 @@ def infer_stages_from_html(html: str) -> list[dict]:
         # useful to the teacher than our generic label.
         # Unescape so a heading reads "Keywords & Objective" on the teacher's
         # stage list, not "Keywords &amp; Objective".
-        clean_heading = " ".join(html_lib.unescape(heading).split())[:60]
+        clean_heading = _clean_label(html_lib.unescape(heading), "")[:60]
 
         if entry.repeatable:
             # Nested markup can surface the same block twice (an outer section
@@ -298,7 +351,7 @@ def infer_stages_from_html(html: str) -> list[dict]:
                 "id": stage_id,
                 "label": label,
                 "type": entry.type,
-                "durationSeconds": 300,
+                "durationSeconds": _recovered_duration(stage_id, inner),
                 "sequentialLock": True,
                 "marks": 10 if stage_id == "main-activity" else None,
             }
