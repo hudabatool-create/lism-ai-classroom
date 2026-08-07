@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Logo from "@/components/Logo";
 import { api } from "@/lib/api";
+import { collectAnswers, watchSubmits } from "@/lib/harvest";
 import { installLockstep, type LockstepHandle } from "@/lib/lockstep";
 import { playTimerSound, type TimerSound } from "@/lib/timerSound";
 import type { LessonManifest, SessionType, Stage } from "@/lib/types";
@@ -180,6 +181,13 @@ export default function JoinPage() {
   // calls through this rather than capturing a stale closure.
   const applyLockstepRef = useRef<(() => void) | null>(null);
   const resyncRef = useRef<(() => void) | null>(null);
+  const harvestRef = useRef<(() => void) | null>(null);
+  // Stages whose answer has already reached the teacher, however it got there.
+  // Stops LISM reading an answer out of an activity that reported its own, and
+  // stops the same answer being sent twice when a student presses submit and
+  // the stage then ends.
+  const reportedStagesRef = useRef<Set<string>>(new Set());
+  const unwatchSubmitsRef = useRef<(() => void) | null>(null);
   const awayRef = useRef(false);
 
   useEffect(() => {
@@ -283,6 +291,11 @@ export default function JoinPage() {
         lockstepRef.current?.destroy();
         lockstepRef.current = installLockstep(doc);
         applyLockstep();
+        // Watch for the student pressing the activity's own submit button, so
+        // their answer reaches the teacher even when the activity never says
+        // a word to us. The activity's own validation still runs untouched.
+        unwatchSubmitsRef.current?.();
+        unwatchSubmitsRef.current = watchSubmits(doc, () => harvestRef.current?.());
       }
     } catch {
       /* not same-origin: fall back to the postMessage contract above */
@@ -313,7 +326,13 @@ export default function JoinPage() {
     applyLockstepRef.current = applyLockstep;
   }, [applyLockstep]);
 
-  useEffect(() => () => lockstepRef.current?.destroy(), []);
+  useEffect(
+    () => () => {
+      lockstepRef.current?.destroy();
+      unwatchSubmitsRef.current?.();
+    },
+    []
+  );
 
   // The activity's response contract: prefer the new 'lism:event' shape
   // (stage-aware), but also accept the older flat 'lism-activity-response'
@@ -345,6 +364,10 @@ export default function JoinPage() {
         stageId = currentStageRef.current?.id ?? info?.activity.manifest.stages[0]?.id;
       }
 
+      // The activity reported this stage itself, so LISM must not also read
+      // the answer out of the page and send it a second time.
+      if (stageId) reportedStagesRef.current.add(stageId);
+
       api
         .post(`/api/join/${code}/response`, { student_id: studentId, stage_id: stageId, correct, answer, mark })
         .then(() => {
@@ -367,6 +390,50 @@ export default function JoinPage() {
     window.addEventListener("message", handleActivityMessage);
     return () => window.removeEventListener("message", handleActivityMessage);
   }, [handleActivityMessage]);
+
+  /** Read the student's answer out of the activity and report it ourselves.
+   *
+   * Only for activities that do not report their own. A worksheet generated
+   * outside LISM validates the answer, prints "Answer accepted!" and tells us
+   * nothing -- so the student saw success while the teacher's live feed stayed
+   * empty, with neither able to see why. Reported with no correctness attached:
+   * nothing here can judge a written answer, and a guessed mark is worse than
+   * an honest "awaiting your teacher".
+   */
+  const harvestAnswer = useCallback(() => {
+    const stage = currentStageRef.current;
+    const doc = iframeRef.current?.contentDocument;
+    const section = lockstepRef.current?.currentSection();
+    if (!stage || !doc || !section || !studentId) return;
+    if (reportedStagesRef.current.has(stage.id)) return;
+
+    const { text, filled } = collectAnswers(section, doc);
+    if (!filled) return;
+
+    reportedStagesRef.current.add(stage.id);
+    api
+      .post(`/api/join/${code}/response`, {
+        student_id: studentId,
+        stage_id: stage.id,
+        correct: null,
+        answer: text,
+        mark: null,
+      })
+      .then(() => {
+        setSubmittedCount((n) => n + 1);
+        setFlash("Answer sent to your teacher.");
+        setTimeout(() => setFlash(null), 3000);
+      })
+      .catch(() => {
+        // Let a genuine failure be retried; a 409 means the activity already
+        // reported this stage itself, which is the outcome we wanted anyway.
+        reportedStagesRef.current.delete(stage.id);
+      });
+  }, [studentId, code]);
+
+  useEffect(() => {
+    harvestRef.current = harvestAnswer;
+  }, [harvestAnswer]);
 
   // Once joined, hold a live WebSocket connection so stage-change commands
   // from the teacher reach this device instantly.
@@ -398,6 +465,9 @@ export default function JoinPage() {
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data);
       if (msg.type === "stage_started") {
+        // Teachers often move straight to the next stage without ending this
+        // one. Collect the outgoing answer before the stage changes under it.
+        harvestRef.current?.();
         currentStageRef.current = msg.stage;
         setPaused(false);
         setStageActive(true);
@@ -406,6 +476,10 @@ export default function JoinPage() {
         setTimer({ startedAt: msg.startedAt, duration: msg.durationSeconds, status: "running" });
         sendCommand("start_stage", { stage: msg.stage });
       } else if (msg.type === "stage_ended") {
+        // Take whatever the student wrote before the screen is covered. A
+        // student who typed a good answer and never pressed submit should not
+        // lose it just because the teacher moved the class on.
+        harvestRef.current?.();
         setPaused(false);
         setStageActive(false);
         stageStartedRef.current = false;

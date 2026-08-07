@@ -114,6 +114,8 @@ export interface LockstepHandle {
    *                recovered before anchors were recorded)
    */
   showStage: (stageId: string | null, index: number, label?: string) => void;
+  /** The section the student is currently on, or null between stages. */
+  currentSection: () => HTMLElement | null;
   destroy: () => void;
 }
 
@@ -296,6 +298,9 @@ export function installLockstep(doc: Document): LockstepHandle | null {
       currentIndex = matched >= 0 ? matched : Math.min(index, sections.length - 1);
       if (stageId === null) currentIndex = -1;
       apply();
+    },
+    currentSection() {
+      return currentIndex >= 0 ? (sections[currentIndex] ?? null) : null;
     },
     destroy() {
       if (pending) clearTimeout(pending);
