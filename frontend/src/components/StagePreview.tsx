@@ -20,7 +20,10 @@ import type { Stage } from "@/lib/types";
 
 /** The width the activity is laid out at before being scaled down to fit. */
 const DESIGN_WIDTH = 1100;
-const DESIGN_HEIGHT = 760;
+/** Before the real section has been measured. */
+const FALLBACK_HEIGHT = 760;
+/** How much of the dashboard the panel may take before it scrolls instead. */
+const MAX_PANEL_HEIGHT = 460;
 
 interface Props {
   activityId: string;
@@ -35,6 +38,7 @@ export default function StagePreview({ activityId, stage, stageIndex, running }:
   const [open, setOpen] = useState(true);
   const [scale, setScale] = useState(0.4);
   const [loaded, setLoaded] = useState(false);
+  const [contentHeight, setContentHeight] = useState(FALLBACK_HEIGHT);
   // null until the iframe loads; false means the activity has no sections we
   // can recognise, which the teacher needs told rather than left to infer
   // from a preview that shows the whole lesson at once.
@@ -68,14 +72,47 @@ export default function StagePreview({ activityId, stage, stageIndex, running }:
     return () => observer.disconnect();
   }, [open]);
 
+  /** How tall the section actually is, so nothing is cut off unreachably.
+   *
+   * Sections are wildly different heights -- a two-line objective slide and a
+   * Knowledge Box with a worked example are not the same shape. A fixed box
+   * clipped the tall ones with no way to reach the rest of them.
+   */
+  const measure = useCallback(() => {
+    const doc = iframeRef.current?.contentDocument;
+    if (!doc) return;
+    const height = Math.max(
+      doc.documentElement?.scrollHeight ?? 0,
+      doc.body?.scrollHeight ?? 0,
+      240
+    );
+    // Resizing the iframe changes the document's own layout, which the
+    // observer then reports back. Ignoring small differences stops that
+    // becoming a loop that never settles.
+    setContentHeight((current) => (Math.abs(current - height) > 8 ? height : current));
+  }, []);
+
   /** Point the preview at whatever stage the teacher has running. */
   const apply = useCallback(() => {
     if (!lockstepRef.current) return;
     const target = stage ? stage.anchor || stage.id : null;
     lockstepRef.current.showStage(running ? target : null, stageIndex, stage?.label);
-  }, [stage, stageIndex, running]);
+    // After the new section is on screen, not before -- its height is the
+    // thing that just changed.
+    requestAnimationFrame(measure);
+  }, [stage, stageIndex, running, measure]);
 
   useEffect(apply, [apply]);
+
+  // The section can also grow on its own: a model answer unfolds, an image
+  // finishes loading. Keep the panel honest about how much there is to see.
+  useEffect(() => {
+    const doc = iframeRef.current?.contentDocument;
+    if (!doc?.body || !loaded) return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(doc.body);
+    return () => observer.disconnect();
+  }, [loaded, measure]);
 
   const handleLoad = () => {
     setLoaded(true);
@@ -92,6 +129,9 @@ export default function StagePreview({ activityId, stage, stageIndex, running }:
   };
 
   useEffect(() => () => lockstepRef.current?.destroy(), []);
+
+  const scaledHeight = contentHeight * scale;
+  const scrolls = running && scaledHeight > MAX_PANEL_HEIGHT + 8;
 
   return (
     <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
@@ -116,10 +156,19 @@ export default function StagePreview({ activityId, stage, stageIndex, running }:
 
       {open && (
         <>
+          {/* Scrolls rather than clipping. The iframe is sized to the whole
+              section and this box caps how much of the dashboard it takes, so
+              a long section -- a Knowledge Box with a worked example -- can be
+              read to the end instead of being cut off at a fixed height.
+              Because the iframe ignores pointer events, the wheel lands here,
+              which is what makes scrolling work without making the preview
+              something the teacher can type into. */}
           <div
             ref={boxRef}
-            className="relative mt-4 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-950"
-            style={{ height: DESIGN_HEIGHT * scale }}
+            className={`relative mt-4 overflow-x-hidden rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-950 ${
+              running ? "overflow-y-auto" : "overflow-hidden"
+            }`}
+            style={{ height: running ? Math.min(scaledHeight, MAX_PANEL_HEIGHT) : 180 }}
           >
             <iframe
               ref={iframeRef}
@@ -131,12 +180,16 @@ export default function StagePreview({ activityId, stage, stageIndex, running }:
               className="border-0"
               style={{
                 width: DESIGN_WIDTH,
-                height: DESIGN_HEIGHT,
+                height: contentHeight,
                 transform: `scale(${scale})`,
                 transformOrigin: "top left",
                 // A mirror, not a second copy to interact with. Without this a
                 // teacher could type into it and wonder where the answer went.
                 pointerEvents: "none",
+                // The scaled box is what the scroll container must measure
+                // against; the untransformed height would leave a long gap
+                // below the section.
+                marginBottom: contentHeight * (scale - 1),
               }}
             />
             {!running && loaded && (
@@ -152,6 +205,13 @@ export default function StagePreview({ activityId, stage, stageIndex, running }:
               </p>
             )}
           </div>
+
+          {scrolls && (
+            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+              This section is longer than the panel &mdash; scroll inside it to see the rest.
+              Students see the whole section on their own screens.
+            </p>
+          )}
 
           {pinned === false && (
             // Worth saying out loud: this is the one case where LISM cannot
