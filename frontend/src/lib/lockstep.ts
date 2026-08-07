@@ -132,7 +132,17 @@ export function installLockstep(doc: Document): LockstepHandle | null {
   const sections = findSlides(doc);
   if (sections.length < 2) return null;
 
+  /** The section on screen. */
   let currentIndex = -1;
+  /**
+   * The furthest section the teacher has opened up.
+   *
+   * Kept apart from currentIndex so a student can move about inside what the
+   * class has already covered without that becoming permission to go further.
+   * Reading ahead is the thing being prevented; moving around behind the
+   * teacher never was.
+   */
+  let teacherIndex = -1;
 
   const stageIdOf = (el: HTMLElement) => el.dataset.stage ?? el.id ?? "";
 
@@ -246,6 +256,44 @@ export function installLockstep(doc: Document): LockstepHandle | null {
   };
   doc.addEventListener("touchmove", touchGuard, { passive: false, capture: true });
 
+  /**
+   * Which section the activity has just tried to show, if any.
+   *
+   * apply() hides every section but currentIndex and, where the deck uses one,
+   * strips its active class off them. So anything else on screen is the deck
+   * having moved itself.
+   */
+  function deckMovedTo(): number {
+    for (let i = 0; i < sections.length; i += 1) {
+      if (i === currentIndex) continue;
+      const el = sections[i];
+      const shown =
+        el.style.display !== "none" ||
+        (activeClass ? el.classList.contains(activeClass) : false);
+      if (shown) return i;
+    }
+    return -1;
+  }
+
+  /**
+   * A student pressing a button is not a deck skipping ahead.
+   *
+   * Some navigation inside a lesson is the lesson: "Change Pathway" sends a
+   * student back to choose again, and a glossary or instructions slide is
+   * meant to be revisited. Undoing those made the button look broken -- the
+   * deck moved, the watchdog moved it straight back, and nothing happened.
+   *
+   * So a move the student actually asked for is allowed, as long as it is not
+   * past the teacher. Anything the deck does on its own, and anything at all
+   * beyond the current stage, is still undone.
+   */
+  let clickedAt = 0;
+  const CLICK_GRACE_MS = 1500;
+  const noteClick = () => {
+    clickedAt = Date.now();
+  };
+  doc.addEventListener("click", noteClick, true);
+
   // The watchdog. Whatever the activity does to change slides, this puts it
   // back -- which means we never have to enumerate the ways it might try.
   //
@@ -259,6 +307,12 @@ export function installLockstep(doc: Document): LockstepHandle | null {
     if (applying || pending) return;
     pending = setTimeout(() => {
       pending = null;
+      if (Date.now() - clickedAt < CLICK_GRACE_MS) {
+        const target = deckMovedTo();
+        // At or behind the teacher only. A pathway chooser earlier in the deck
+        // is fair game; the next slide never is.
+        if (target >= 0 && target <= teacherIndex) currentIndex = target;
+      }
       apply();
     }, WATCHDOG_DELAY_MS);
   });
@@ -297,6 +351,9 @@ export function installLockstep(doc: Document): LockstepHandle | null {
       const matched = byId >= 0 ? byId : byHeading;
       currentIndex = matched >= 0 ? matched : Math.min(index, sections.length - 1);
       if (stageId === null) currentIndex = -1;
+      // The teacher starting a stage is the only thing that opens up more of
+      // the deck, and it always wins over wherever the student had wandered.
+      teacherIndex = currentIndex;
       apply();
     },
     currentSection() {
@@ -306,6 +363,7 @@ export function installLockstep(doc: Document): LockstepHandle | null {
       if (pending) clearTimeout(pending);
       pending = null;
       observer?.disconnect();
+      doc.removeEventListener("click", noteClick, true);
       doc.removeEventListener("keydown", keyGuard, true);
       doc.removeEventListener("touchmove", touchGuard, true);
     },

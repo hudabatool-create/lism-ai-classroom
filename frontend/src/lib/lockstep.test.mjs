@@ -249,6 +249,79 @@ check("falls back to position when neither id nor heading matches",
 
 lock4?.destroy();
 
+// ---------------------------------------------------------------------------
+// Navigation that is part of the lesson, not an escape from it.
+//
+// A deck's "Change Pathway" button sends the student back to choose again.
+// The watchdog undid it the instant it happened, so the button did nothing at
+// all and looked broken. A move the student asked for is allowed as long as
+// it is not past the teacher; the deck moving itself, and anything beyond the
+// current stage, is still undone.
+// ---------------------------------------------------------------------------
+const PATHWAY = `<!DOCTYPE html><html><head><style>
+  .slide { display: none; } .slide.active { display: block; }
+</style></head><body><div class="deck">
+  <div class="slide active" id="p1"><h2>Starter</h2></div>
+  <div class="slide" id="p2"><h2>Choose Your Pathway</h2>
+    <button id="pick">Choose ALL</button></div>
+  <div class="slide" id="p3"><h2>Main Task</h2>
+    <button id="change">Change Pathway</button>
+    <button id="peek">See the answers</button></div>
+  <div class="slide" id="p4"><h2>Exit Ticket</h2></div>
+</div>
+<script>
+  function go(id) {
+    document.querySelectorAll('.slide').forEach(s => s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+  }
+  document.getElementById('change').onclick = () => go('p2');
+  document.getElementById('pick').onclick = () => go('p3');
+  document.getElementById('peek').onclick = () => go('p4');   // ahead: must fail
+  window.__drift = () => go('p4');                            // deck moving itself
+</script></body></html>`;
+
+const dom5 = new JSDOM(PATHWAY, { pretendToBeVisual: true, runScripts: "dangerously" });
+const doc5 = dom5.window.document;
+global.MutationObserver = dom5.window.MutationObserver;
+
+const lock5 = installLockstep(doc5);
+const on = () =>
+  [...doc5.querySelectorAll(".slide")]
+    .filter((s) => s.classList.contains("active") && s.style.display !== "none")
+    .map((s) => s.id)
+    .join(",") || "(none)";
+
+const press = async (id) => {
+  doc5.getElementById(id).dispatchEvent(new dom5.window.MouseEvent("click", { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 250));
+};
+
+lock5?.showStage("p3", 2, "Main Task");
+check("the teacher's stage is showing", on() === "p3", on());
+
+await press("change");
+check("Change Pathway reaches the pathway slide", on() === "p2", `showing ${on()}`);
+
+await press("pick");
+check("choosing a pathway returns to the task", on() === "p3", `showing ${on()}`);
+
+await press("peek");
+check("a button that jumps AHEAD is still refused", on() === "p3",
+  `student reached ${on()} -- reading ahead must stay impossible`);
+
+// The deck moving itself, with no student click anywhere near it.
+await new Promise((r) => setTimeout(r, 1600));      // let the click grace lapse
+dom5.window.__drift();
+await new Promise((r) => setTimeout(r, 250));
+check("a deck that drifts on its own is still put back", on() === "p3", `showing ${on()}`);
+
+lock5?.showStage("p4", 3, "Exit Ticket");
+check("the teacher moving on still moves everyone", on() === "p4", on());
+await press("change");
+check("once further in, going back is allowed", on() === "p2", `showing ${on()}`);
+
+lock5?.destroy();
+
 const passed2 = results.filter(Boolean).length;
 console.log(`\nTOTAL ${passed2} passed, ${results.length - passed2} failed`);
 process.exit(results.every(Boolean) ? 0 : 1);
