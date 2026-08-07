@@ -81,11 +81,20 @@ export default function StagePreview({ activityId, stage, stageIndex, running }:
   const measure = useCallback(() => {
     const doc = iframeRef.current?.contentDocument;
     if (!doc) return;
-    const height = Math.max(
-      doc.documentElement?.scrollHeight ?? 0,
-      doc.body?.scrollHeight ?? 0,
-      240
-    );
+    // The section's own bottom edge, not the document's. The document also
+    // holds a sticky header and the page's own bottom padding, so measuring
+    // it made a two-line objectives slide reserve as much room as a Knowledge
+    // Box -- every section came out the same height, which is the thing this
+    // was meant to stop.
+    const section = lockstepRef.current?.currentSection();
+    const view = doc.defaultView;
+
+    const measured =
+      section && view
+        ? section.getBoundingClientRect().bottom + (view.scrollY || 0) + 24
+        : Math.max(doc.documentElement?.scrollHeight ?? 0, doc.body?.scrollHeight ?? 0);
+
+    const height = Math.max(measured, 240);
     // Resizing the iframe changes the document's own layout, which the
     // observer then reports back. Ignoring small differences stops that
     // becoming a loop that never settles.
