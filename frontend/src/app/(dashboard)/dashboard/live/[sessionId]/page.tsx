@@ -132,6 +132,10 @@ export default function LiveSessionPage() {
   const [detail, setDetail] = useState<SessionDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [ending, setEnding] = useState(false);
+  // null = show whichever stage the class is on. A stage id pins the feed
+  // there so a teacher can discuss an earlier section without the list moving
+  // under them when the lesson advances.
+  const [pinnedStage, setPinnedStage] = useState<string | null>(null);
   const [stageActionPending, setStageActionPending] = useState(false);
 
   useEffect(() => {
@@ -354,6 +358,27 @@ export default function LiveSessionPage() {
   } = detail;
   const stages = activity.manifest.stages;
   const isLastStage = session.current_stage_index >= stages.length - 1;
+
+  // Which stage's answers the teacher is reading. Null means "follow the
+  // class", which is what a teacher wants by default: start a stage, turn to
+  // the room, and the answers to that stage are already the ones on screen.
+  // "__all" is the old undivided feed, kept for anyone who wants it.
+  const showingAll = pinnedStage === "__all";
+  const feedStage = showingAll
+    ? null
+    : (stages.find((s) => s.id === (pinnedStage ?? current_stage?.id)) ?? null);
+
+  const feedResponses = feedStage
+    ? responses.filter((r) => r.stage_id === feedStage.id)
+    : [...responses].reverse();
+
+  // One answer per student per stage, so this counts students, not submissions.
+  const answeredCount = feedStage
+    ? new Set(feedResponses.map((r) => r.student_id)).size
+    : 0;
+  const waitingOn = feedStage
+    ? students.filter((s) => !feedResponses.some((r) => r.student_id === s.id))
+    : [];
 
   /** Students in one status (or all, when omitted), each labelled with the
    *  stage they last answered and how far through they are -- a bare count
@@ -749,12 +774,53 @@ export default function LiveSessionPage() {
         </div>
 
         <div>
-          <h2 className="mb-2 text-lg font-semibold text-slate-900 dark:text-white">Live responses</h2>
-          {responses.length === 0 ? (
-            <p className="text-sm text-slate-500">Waiting for the first response...</p>
+          <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+              {feedStage ? "Answers to discuss" : "Live responses"}
+            </h2>
+            {/* Which part of the lesson the class is answering. Defaults to
+                whatever is running, so a teacher who starts a stage and turns
+                to the class sees that stage's answers without touching
+                anything -- and can still look back at an earlier one to
+                discuss it. */}
+            <select
+              value={pinnedStage ?? ""}
+              onChange={(e) => setPinnedStage(e.target.value || null)}
+              className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+            >
+              <option value="">Follow the class</option>
+              {stages.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.label} ({responses.filter((r) => r.stage_id === s.id).length})
+                </option>
+              ))}
+              <option value="__all">Every stage ({responses.length})</option>
+            </select>
+          </div>
+
+          {feedStage && (
+            <p className="mb-2 text-sm text-slate-500 dark:text-slate-400">
+              <span className="font-medium text-slate-700 dark:text-slate-200">{feedStage.label}</span>
+              {" — "}
+              <span className={answeredCount === students.length && students.length > 0 ? "text-green-600" : ""}>
+                {answeredCount} of {students.length} answered
+              </span>
+            </p>
+          )}
+
+          {feedResponses.length === 0 ? (
+            <p className="text-sm text-slate-500">
+              {responses.length === 0
+                ? "Waiting for the first response..."
+                : "Nobody has answered this part yet."}
+            </p>
           ) : (
-            <ul className="space-y-2">
-              {[...responses].reverse().map((r) => {
+            // Capped and scrollable: a full class answering a written question
+            // is thirty paragraphs, and letting that push the stage controls
+            // and the preview off the screen would cost the teacher the things
+            // they actually steer the lesson with.
+            <ul className="max-h-[32rem] space-y-2 overflow-y-auto pr-1">
+              {feedResponses.map((r) => {
                 const student = students.find((s) => s.id === r.student_id);
                 const stage = stages.find((s) => s.id === r.stage_id);
                 return (
@@ -798,6 +864,16 @@ export default function LiveSessionPage() {
                 );
               })}
             </ul>
+          )}
+
+          {/* Who the teacher is still waiting on. A count alone tells them
+              eighteen of thirty have answered but not which twelve, which is
+              the thing you need before deciding whether to wait or move on. */}
+          {feedStage && waitingOn.length > 0 && (
+            <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+              <span className="font-semibold">Still to answer ({waitingOn.length}):</span>{" "}
+              {waitingOn.map((s) => s.name).join(", ")}
+            </p>
           )}
         </div>
       </div>

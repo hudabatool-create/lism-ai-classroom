@@ -36,7 +36,7 @@ interface Props {
 
 export default function StagePreview({ activityId, stage, stageIndex, running }: Props) {
   const [open, setOpen] = useState(true);
-  const [scale, setScale] = useState(0.4);
+  const [boxWidth, setBoxWidth] = useState(DESIGN_WIDTH);
   const [loaded, setLoaded] = useState(false);
   const [contentHeight, setContentHeight] = useState(FALLBACK_HEIGHT);
   // null until the iframe loads; false means the activity has no sections we
@@ -60,12 +60,10 @@ export default function StagePreview({ activityId, stage, stageIndex, running }:
     });
   };
 
-  // Scale the full-width activity down to whatever room the panel has, rather
-  // than showing a cropped corner of it.
   useEffect(() => {
     const box = boxRef.current;
     if (!box || !open) return;
-    const fit = () => setScale(Math.min(1, box.clientWidth / DESIGN_WIDTH));
+    const fit = () => setBoxWidth(box.clientWidth);
     fit();
     const observer = new ResizeObserver(fit);
     observer.observe(box);
@@ -131,6 +129,15 @@ export default function StagePreview({ activityId, stage, stageIndex, running }:
       lockstepRef.current?.destroy();
       lockstepRef.current = installLockstep(doc);
       setPinned(lockstepRef.current !== null);
+
+      // The activity's own scrollbar is a dead control here: the frame ignores
+      // mouse input, so it cannot be dragged, and the only thing past the
+      // section is the page's own blank bottom padding. Two bars, one of which
+      // does nothing, reads as a preview that has frozen. The panel outside
+      // owns all the scrolling.
+      doc.documentElement.style.overflow = "hidden";
+      if (doc.body) doc.body.style.overflow = "hidden";
+
       apply();
     } catch {
       setPinned(false);
@@ -138,6 +145,13 @@ export default function StagePreview({ activityId, stage, stageIndex, running }:
   };
 
   useEffect(() => () => lockstepRef.current?.destroy(), []);
+
+  // On a wide dashboard, lay the activity out at the panel's own width rather
+  // than at 1100px with dead space beside it. On a narrow one there is no room
+  // to do that, so lay it out at 1100 and scale the whole thing down to fit.
+  const roomy = boxWidth >= DESIGN_WIDTH;
+  const frameWidth = roomy ? boxWidth : DESIGN_WIDTH;
+  const scale = roomy ? 1 : boxWidth / DESIGN_WIDTH;
 
   const scaledHeight = contentHeight * scale;
   const scrolls = running && scaledHeight > MAX_PANEL_HEIGHT + 8;
@@ -188,7 +202,7 @@ export default function StagePreview({ activityId, stage, stageIndex, running }:
               title="Preview of the stage students are on"
               className="border-0"
               style={{
-                width: DESIGN_WIDTH,
+                width: frameWidth,
                 height: contentHeight,
                 transform: `scale(${scale})`,
                 transformOrigin: "top left",
