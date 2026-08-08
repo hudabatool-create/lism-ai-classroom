@@ -106,13 +106,22 @@ export default function StagePreview({ activityId, stage, stageIndex, running }:
 
     // Nothing hidden: the section's own bottom edge is the honest height, and
     // that is what lets a short section show a short panel.
-    const natural =
+    const bottom =
       section && view
-        ? section.getBoundingClientRect().bottom + (view.scrollY || 0) + 24
+        ? section.getBoundingClientRect().bottom + (view.scrollY || 0)
         : Math.max(doc.documentElement?.scrollHeight ?? 0, doc.body?.scrollHeight ?? 0);
 
     setContentHeight((current) => {
-      const target = hidden > 8 ? current + hidden : natural;
+      let target: number;
+      if (hidden > 8) {
+        target = current + hidden;
+      } else {
+        // The gutter goes on only when the section ends short of the frame.
+        // A slide sized to the whole screen ends exactly at the frame, so
+        // adding to it grew the frame every single pass -- which is how this
+        // ran to its limit twice, leaving a screen of nothing to scroll past.
+        target = bottom + (bottom < current - 24 ? 24 : 0);
+      }
       const height = Math.min(Math.max(target, 240), 6000);
       // Resizing the frame relayouts the document, which the observer reports
       // straight back. Ignoring small differences stops that becoming a loop.
