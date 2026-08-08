@@ -95,6 +95,15 @@ class Student(Base):
     needs_help: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     help_requests: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     coach_messages: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Focus violations the teacher has let go, so a student they have spoken to
+    # can carry on. Counted rather than cleared: the violations stay on the
+    # record for the Focus Report, and three more still lock the student again,
+    # so forgiving once does not hand out a free pass for the rest of the
+    # lesson. There was no way back at all before this -- a locked student
+    # stayed locked for the whole lesson whatever the teacher decided.
+    violations_forgiven: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
 
 
 class Response(Base):

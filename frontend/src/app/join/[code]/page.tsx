@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Logo from "@/components/Logo";
 import { api } from "@/lib/api";
+import { installCopyGuard } from "@/lib/copyGuard";
 import { collectAnswers, watchSubmits } from "@/lib/harvest";
 import { installLockstep, type LockstepHandle } from "@/lib/lockstep";
 import { playTimerSound, type TimerSound } from "@/lib/timerSound";
@@ -188,6 +189,9 @@ export default function JoinPage() {
   // the stage then ends.
   const reportedStagesRef = useRef<Set<string>>(new Set());
   const unwatchSubmitsRef = useRef<(() => void) | null>(null);
+  // Bumped each time the activity finishes loading, so guards that reach into
+  // its document are reinstalled against the new one.
+  const [iframeLoadCount, setIframeLoadCount] = useState(0);
   const awayRef = useRef(false);
 
   useEffect(() => {
@@ -274,6 +278,7 @@ export default function JoinPage() {
   }
 
   function handleIframeLoad() {
+    setIframeLoadCount((n) => n + 1);
     // Config first: the activity should know the rules before the student can
     // interact with the stage it is about to be shown.
     if (info) sendConfig(info.session);
@@ -510,6 +515,14 @@ export default function JoinPage() {
           .get<StudentReport>(`/api/join/${code}/report/${studentId}`)
           .then((r) => setReport(r))
           .catch(() => setFlash("Your teacher ended the lesson."));
+      } else if (msg.type === "focus_unlocked") {
+        // The teacher has spoken to this student and let them back in.
+        setLocked(null);
+        setWarning(null);
+        awayRef.current = false;
+        setFlash("Your teacher has unlocked your screen — you can carry on.");
+        setTimeout(() => setFlash(null), 5000);
+        resyncRef.current?.();
       } else if (msg.type === "settings_updated") {
         setInfo((prev) =>
           prev
@@ -617,6 +630,30 @@ export default function JoinPage() {
   useEffect(() => {
     resyncRef.current = resync;
   }, [resync]);
+
+  /* Copy & paste protection, enforced rather than requested.
+   *
+   * Until now this was only a set_config message the activity could ignore --
+   * and an activity generated outside LISM has never heard of it. The teacher
+   * switched it on, watched it switch on, and students carried on pasting.
+   * Runs on this page and inside the activity, and lifts the moment the
+   * teacher switches it off, without anyone reloading. */
+  const copyProtected = info?.session.copy_paste_protection ?? false;
+  useEffect(() => {
+    if (!copyProtected || !studentId) return;
+    const warn = () => {
+      setFlash("Copy and paste are switched off for this lesson — please type your answer.");
+      setTimeout(() => setFlash(null), 2500);
+    };
+    const teardown = [installCopyGuard(document, { onBlocked: warn })];
+    try {
+      const doc = iframeRef.current?.contentDocument;
+      if (doc) teardown.push(installCopyGuard(doc, { onBlocked: warn }));
+    } catch {
+      /* not same-origin: the page-level guard still applies */
+    }
+    return () => teardown.forEach((off) => off());
+  }, [copyProtected, studentId, iframeLoadCount]);
 
   // Focus Mode: driven by the teacher's focus_monitoring setting, which
   // defaults on for an assessment but is now switchable mid-lesson either

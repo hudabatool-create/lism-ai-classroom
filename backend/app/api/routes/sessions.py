@@ -382,13 +382,55 @@ class FocusViolationRequest(BaseModel):
 async def report_focus_violation(code: str, payload: FocusViolationRequest):
     session = active_session_for_student(code, payload.student_id)
     violation = await astore.add_focus_violation(session["id"], payload.student_id, payload.type)
-    locked = violation["violation_number"] >= 3
+    # Ask the store, rather than counting the raw total. A student the teacher
+    # has already let back in starts from three again, not from wherever their
+    # running total happens to be -- otherwise unlocking someone would last
+    # exactly one tab switch.
+    locked = await astore.is_locked(session["id"], payload.student_id)
     await manager.broadcast(
         session["code"], {"type": "focus_violation", "violation": violation, "locked": locked}, roles=("teacher",)
     )
     activity = await astore.get_activity(session["activity_id"])
     await broadcast_status_update(session, activity)
     return {"violation_number": violation["violation_number"], "locked": locked}
+
+
+class UnlockRequest(BaseModel):
+    student_id: str
+
+
+@router.post("/sessions/{session_id}/unlock")
+async def unlock_student(
+    session_id: str, payload: UnlockRequest, teacher: dict = Depends(get_current_teacher)
+):
+    """Let a student back into the lesson after a focus lock.
+
+    Three tab switches locked a student out with no way back: not by the
+    teacher, not by rejoining, not by anything. A child who lost their
+    connection, or picked up a genuine notification, sat out the rest of the
+    lesson while the class carried on. Whether that is the right outcome is a
+    judgement for the teacher in the room, and they had no way to make it.
+
+    Teacher-only and scoped to their own session, because this is the control
+    that undoes an integrity measure -- it must not be reachable from the
+    device that got locked.
+    """
+    session = await astore.get_session(session_id)
+    if not session or session["teacher_id"] != teacher["id"]:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    forgiven = await astore.forgive_violations(session_id, payload.student_id)
+    await manager.send_to_student(
+        session["code"], payload.student_id, {"type": "focus_unlocked"}
+    )
+    activity = await astore.get_activity(session["activity_id"])
+    await broadcast_status_update(session, activity)
+    await manager.broadcast(
+        session["code"],
+        {"type": "student_unlocked", "student_id": payload.student_id},
+        roles=("teacher",),
+    )
+    return {"unlocked": True, "violations_forgiven": forgiven}
 
 
 class NeedHelpRequest(BaseModel):

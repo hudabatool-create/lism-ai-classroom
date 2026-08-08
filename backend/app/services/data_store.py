@@ -686,7 +686,27 @@ class DataStore:
             return {student_id: count for student_id, count in rows}
 
     def is_locked(self, session_id: str, student_id: str) -> bool:
-        return self.get_violation_count(session_id, student_id) >= 3
+        with SessionLocal() as db:
+            forgiven = db.scalar(
+                select(Student.violations_forgiven).where(Student.id == student_id)
+            ) or 0
+        return self.get_violation_count(session_id, student_id) - forgiven >= 3
+
+    def forgive_violations(self, session_id: str, student_id: str) -> int:
+        """Let a locked student carry on, without erasing what happened.
+
+        Forgives everything counted so far rather than deleting it: the Focus
+        Report still shows every violation, and three more lock the student
+        again. Returns the number forgiven.
+        """
+        count = self.get_violation_count(session_id, student_id)
+        with SessionLocal() as db:
+            student = db.get(Student, student_id)
+            if student is None or student.session_id != session_id:
+                return 0
+            student.violations_forgiven = count
+            db.commit()
+        return count
 
     def list_focus_violations(self, session_id: str) -> list[dict]:
         with SessionLocal() as db:

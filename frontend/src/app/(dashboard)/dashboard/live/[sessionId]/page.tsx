@@ -136,6 +136,7 @@ export default function LiveSessionPage() {
   // there so a teacher can discuss an earlier section without the list moving
   // under them when the lesson advances.
   const [pinnedStage, setPinnedStage] = useState<string | null>(null);
+  const [unlocking, setUnlocking] = useState<string | null>(null);
   const [stageActionPending, setStageActionPending] = useState(false);
 
   useEffect(() => {
@@ -293,6 +294,25 @@ export default function LiveSessionPage() {
       await api.post(`/api/sessions/${detail.session.id}/stage/end`);
     } finally {
       setStageActionPending(false);
+    }
+  }
+
+  /** Let a locked student back into the lesson.
+   *
+   * Confirmed first, because it undoes an integrity measure and the teacher
+   * should be doing it on purpose after speaking to the student -- not by
+   * brushing the wrong row on a touchscreen mid-lesson.
+   */
+  async function handleUnlock(studentId: string, name: string) {
+    if (!detail) return;
+    if (!window.confirm(`Unlock ${name}? Their exits stay on the focus report, and three more will lock them again.`)) {
+      return;
+    }
+    setUnlocking(studentId);
+    try {
+      await api.post(`/api/sessions/${detail.session.id}/unlock`, { student_id: studentId });
+    } finally {
+      setUnlocking(null);
     }
   }
 
@@ -598,6 +618,8 @@ export default function LiveSessionPage() {
           stage={current_stage}
           stageIndex={session.current_stage_index}
           running={session.stage_status === "running" || session.stage_status === "paused"}
+          stages={stages}
+          currentStageIndex={session.current_stage_index}
         />
       )}
 
@@ -761,6 +783,20 @@ export default function LiveSessionPage() {
                     <span className="flex items-center gap-2">
                       {statusInfo && statusInfo.violation_count > 0 && (
                         <span className="text-xs text-red-500">{statusInfo.violation_count}/3 exits</span>
+                      )}
+                      {/* A locked student had no way back in -- not from the
+                          teacher, not by rejoining. A child who lost wifi or
+                          took a real notification sat out the rest of the
+                          lesson, and whether that is right is the teacher's
+                          call to make in the room. */}
+                      {status === "locked" && (
+                        <button
+                          onClick={() => handleUnlock(s.id, s.name)}
+                          disabled={unlocking === s.id}
+                          className="rounded-lg border border-amber-400 px-2.5 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950"
+                        >
+                          {unlocking === s.id ? "Unlocking..." : "Unlock"}
+                        </button>
                       )}
                       <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_BADGE_CLASSES[status]}`}>
                         {STATUS_LABELS[status]}

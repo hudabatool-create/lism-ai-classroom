@@ -32,9 +32,37 @@ interface Props {
   /** Its position in the stage list -- the last-resort way to find it. */
   stageIndex: number;
   running: boolean;
+  /** Every stage, so the teacher can look back at one they have already run. */
+  stages: Stage[];
+  /** How far the lesson has got; nothing beyond this can be looked at. */
+  currentStageIndex: number;
 }
 
-export default function StagePreview({ activityId, stage, stageIndex, running }: Props) {
+export default function StagePreview({
+  activityId,
+  stage,
+  stageIndex,
+  running,
+  stages,
+  currentStageIndex,
+}: Props) {
+  /**
+   * A stage the teacher is looking back at, or null for the live one.
+   *
+   * Looking back changes nothing for anybody else: no broadcast, no stage
+   * change, no timer. The class carries on exactly as it was. That is what
+   * makes this the safe way to check what an earlier slide said -- the worst
+   * it can do is show the wrong slide on the teacher's own screen.
+   */
+  const [lookingAt, setLookingAt] = useState<string | null>(null);
+  const reviewed = lookingAt ? (stages.find((s) => s.id === lookingAt) ?? null) : null;
+  const reviewedIndex = reviewed ? stages.findIndex((s) => s.id === reviewed.id) : -1;
+
+  // What the panel is actually showing, live stage or looked-back one.
+  const shownStage = reviewed ?? stage;
+  const shownIndex = reviewed ? reviewedIndex : stageIndex;
+  const shownRunning = reviewed ? true : running;
+
   const [open, setOpen] = useState(true);
   const [boxWidth, setBoxWidth] = useState(DESIGN_WIDTH);
   const [loaded, setLoaded] = useState(false);
@@ -132,12 +160,12 @@ export default function StagePreview({ activityId, stage, stageIndex, running }:
   /** Point the preview at whatever stage the teacher has running. */
   const apply = useCallback(() => {
     if (!lockstepRef.current) return;
-    const target = stage ? stage.anchor || stage.id : null;
-    lockstepRef.current.showStage(running ? target : null, stageIndex, stage?.label);
+    const target = shownStage ? shownStage.anchor || shownStage.id : null;
+    lockstepRef.current.showStage(shownRunning ? target : null, shownIndex, shownStage?.label);
     // After the new section is on screen, not before -- its height is the
     // thing that just changed.
     requestAnimationFrame(measure);
-  }, [stage, stageIndex, running, measure]);
+  }, [shownStage, shownIndex, shownRunning, measure]);
 
   useEffect(apply, [apply]);
 
@@ -184,28 +212,58 @@ export default function StagePreview({ activityId, stage, stageIndex, running }:
   const scale = roomy ? 1 : boxWidth / DESIGN_WIDTH;
 
   const scaledHeight = contentHeight * scale;
-  const scrolls = running && scaledHeight > MAX_PANEL_HEIGHT + 8;
+  const scrolls = shownRunning && scaledHeight > MAX_PANEL_HEIGHT + 8;
 
   return (
     <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-slate-900 dark:text-white">
-            What students are seeing
+            {reviewed ? "Looking back" : "What students are seeing"}
           </p>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            {running && stage
-              ? `Everyone is on ${stage.label}.`
-              : "No stage running — every student's screen is covered."}
+            {reviewed
+              ? `${reviewed.label} — students have not moved.`
+              : running && stage
+                ? `Everyone is on ${stage.label}.`
+                : "No stage running — every student's screen is covered."}
           </p>
         </div>
-        <button
-          onClick={toggle}
-          className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-        >
-          {open ? "Hide" : "Show"}
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Only stages the class has already reached. Looking back is safe
+              precisely because it changes nothing; letting a teacher look
+              *forward* would put an unstarted slide on a screen that says
+              "what students are seeing", which is the opposite of the point. */}
+          <select
+            value={lookingAt ?? ""}
+            onChange={(e) => setLookingAt(e.target.value || null)}
+            className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+          >
+            <option value="">Live — follow the class</option>
+            {stages.slice(0, Math.max(currentStageIndex + 1, 0)).map((s) => (
+              <option key={s.id} value={s.id}>
+                Look back at {s.label}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={toggle}
+            className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+          >
+            {open ? "Hide" : "Show"}
+          </button>
+        </div>
       </div>
+
+      {reviewed && (
+        <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+          You are looking at an earlier stage. Nothing has changed for your students &mdash; they
+          are still on {stage ? stage.label : "the waiting screen"}.{" "}
+          <button onClick={() => setLookingAt(null)} className="font-semibold underline">
+            Back to live
+          </button>
+        </p>
+      )}
 
       {open && (
         <>
@@ -219,9 +277,9 @@ export default function StagePreview({ activityId, stage, stageIndex, running }:
           <div
             ref={boxRef}
             className={`relative mt-4 overflow-x-hidden rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-950 ${
-              running ? "overflow-y-auto" : "overflow-hidden"
+              shownRunning ? "overflow-y-auto" : "overflow-hidden"
             }`}
-            style={{ height: running ? Math.min(scaledHeight, MAX_PANEL_HEIGHT) : 180 }}
+            style={{ height: shownRunning ? Math.min(scaledHeight, MAX_PANEL_HEIGHT) : 180 }}
           >
             <iframe
               ref={iframeRef}
@@ -245,7 +303,7 @@ export default function StagePreview({ activityId, stage, stageIndex, running }:
                 marginBottom: contentHeight * (scale - 1),
               }}
             />
-            {!running && loaded && (
+            {!shownRunning && loaded && (
               <div className="absolute inset-0 flex items-center justify-center bg-slate-900/60 text-center text-sm font-medium text-white">
                 Students see &ldquo;Waiting for your teacher&rdquo;
                 <br />
