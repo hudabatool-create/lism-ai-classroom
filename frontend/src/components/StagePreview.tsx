@@ -87,12 +87,34 @@ export default function StagePreview({ activityId, stage, stageIndex, running }:
     const section = lockstepRef.current?.currentSection();
     const view = doc.defaultView;
 
-    const measured =
-      section && view
-        ? section.getBoundingClientRect().bottom + (view.scrollY || 0) + 24
-        : Math.max(doc.documentElement?.scrollHeight ?? 0, doc.body?.scrollHeight ?? 0);
+    let measured = Math.max(
+      doc.documentElement?.scrollHeight ?? 0,
+      doc.body?.scrollHeight ?? 0
+    );
 
-    const height = Math.max(measured, 240);
+    if (section && view) {
+      const rect = section.getBoundingClientRect();
+      const top = rect.top + (view.scrollY || 0);
+      // scrollHeight, not the box height. A deck whose slides are a full
+      // screen tall with the content scrolling inside them measures exactly
+      // the frame every time, so the frame never grew and the deck scrolled
+      // itself instead -- behind a scrollbar the teacher cannot drag, because
+      // the frame ignores mouse input. Measuring the content makes the frame
+      // grow until there is nothing left to scroll.
+      measured = top + Math.max(section.scrollHeight, rect.height) + 24;
+
+      // Same again for anything scrolling within the section: give the frame
+      // the height that region is hiding.
+      let hidden = 0;
+      section.querySelectorAll<HTMLElement>("*").forEach((el) => {
+        const over = el.scrollHeight - el.clientHeight;
+        if (over > 8 && el.clientHeight > 40) hidden = Math.max(hidden, over);
+      });
+      measured += hidden;
+    }
+
+    // A deck that keeps growing as fast as we give it room would never settle.
+    const height = Math.min(Math.max(measured, 240), 4000);
     // Resizing the iframe changes the document's own layout, which the
     // observer then reports back. Ignoring small differences stops that
     // becoming a loop that never settles.
