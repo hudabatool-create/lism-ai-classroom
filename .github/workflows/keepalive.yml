@@ -1,0 +1,48 @@
+# Keeps the database from being paused for inactivity.
+#
+# Supabase pauses a free project that sees no activity for seven days. During
+# term time thirty students a day keep it busy, but a long holiday would take
+# LISM offline until someone noticed and unpaused it -- and a project left
+# paused for ninety days cannot be unpaused at all, only downloaded.
+#
+# /api/health/db runs a real query against the database, which is the thing
+# being measured. It needs no secrets: it returns timings and a hostname, and
+# no credential, connection string or student data.
+name: Keep the database awake
+
+on:
+  schedule:
+    # 06:17 UTC daily. An odd minute on purpose -- GitHub drops jobs scheduled
+    # on the hour when its queue is busy, and a skipped run is invisible.
+    - cron: "17 6 * * *"
+  workflow_dispatch:        # so it can be run by hand to check it works
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Query the database through the API
+        run: |
+          set -euo pipefail
+          URL="https://lism-ai-classroom-production.up.railway.app/api/health/db"
+
+          # Railway sleeps idle containers, so the first call can be slow.
+          # Three tries before calling it a failure.
+          for attempt in 1 2 3; do
+            if body=$(curl -sS --max-time 60 "$URL"); then
+              echo "$body" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+if d.get("connect_error"):
+    sys.exit(f"database refused the connection: {d[\"connect_error\"]}")
+print(f"ok - {d[\"db_host\"]} ({d[\"db_region\"]}) responded in {d[\"median_ms\"]}ms")
+'
+              exit 0
+            fi
+            echo "attempt $attempt failed, retrying in 30s"
+            sleep 30
+          done
+
+          echo "::error::Could not reach the database in three attempts."
+          echo "::error::LISM may be down, or the project may already be paused."
+          exit 1
