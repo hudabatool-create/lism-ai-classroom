@@ -8,6 +8,7 @@ from app.core.config import settings
 from app.db import models  # noqa: F401 -- registers tables on Base.metadata
 from app.db.base import Base, engine
 from app.db.migrate import add_missing_columns
+from app.services import email_service
 
 app = FastAPI(title=settings.app_name)
 
@@ -83,6 +84,13 @@ def health():
         "canonical_origin": settings.canonical_origin,
         "cookie_samesite": settings.cookie_samesite,
         "cookie_secure": settings.cookie_secure,
+        # Whether a locked-out teacher can actually get a reset link. Without
+        # this the failure is silent: the app says "check your email" and
+        # nothing arrives, and you find out from someone who cannot log in.
+        # The host and sender only -- never the username or password.
+        "email_configured": email_service.is_configured(),
+        "email_host": settings.smtp_host or None,
+        "email_from": settings.smtp_from_email if settings.smtp_host else None,
     }
 
 

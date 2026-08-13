@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response
 from pydantic import BaseModel, EmailStr
 
 from app.api.deps import get_current_teacher
@@ -45,10 +45,17 @@ def _public(teacher: dict) -> dict:
     }
 
 
-def _send_verification_email(teacher: dict) -> None:
+def _send_verification_email(teacher: dict, background: BackgroundTasks) -> None:
+    """Queue the verification email rather than waiting for the mail server.
+
+    Sending inline made signing up as slow as the slowest SMTP round trip. A
+    room of thirty teachers all signing up in the same two minutes of a PD
+    session is exactly when that is least affordable, and a mail server having
+    a bad day would have shown up as LISM being broken.
+    """
     token = store.create_email_verification_token(teacher["id"])
     verify_url = f"{settings.canonical_origin}/verify-email/{token}"
-    send_verification_email(teacher["email"], teacher["name"], verify_url)
+    background.add_task(send_verification_email, teacher["email"], teacher["name"], verify_url)
 
 
 def _set_session_cookie(response: Response, token: str) -> None:
@@ -70,13 +77,13 @@ def _set_session_cookie(response: Response, token: str) -> None:
 
 
 @router.post("/signup", response_model=AuthResponse)
-def signup(payload: SignupRequest, response: Response):
+def signup(payload: SignupRequest, response: Response, background: BackgroundTasks):
     if len(payload.password) < MIN_PASSWORD_LENGTH:
         raise HTTPException(status_code=400, detail=f"Password must be at least {MIN_PASSWORD_LENGTH} characters")
     if store.get_teacher_by_email(payload.email):
         raise HTTPException(status_code=400, detail="An account with this email already exists")
     teacher = store.create_teacher(payload.name, payload.email, hash_password(payload.password))
-    _send_verification_email(teacher)
+    _send_verification_email(teacher, background)
     token = create_access_token(teacher["id"], teacher["email"])
     _set_session_cookie(response, token)
     return AuthResponse(teacher=_public(teacher))
@@ -130,15 +137,15 @@ def verify_email(token: str):
 
 
 @router.post("/resend-verification")
-def resend_verification(teacher: dict = Depends(get_current_teacher)):
+def resend_verification(background: BackgroundTasks, teacher: dict = Depends(get_current_teacher)):
     if teacher["email_verified"]:
         return {"ok": True, "already_verified": True}
-    _send_verification_email(teacher)
+    _send_verification_email(teacher, background)
     return {"ok": True, "already_verified": False}
 
 
 @router.post("/forgot-password")
-def forgot_password(payload: ForgotPasswordRequest):
+def forgot_password(payload: ForgotPasswordRequest, background: BackgroundTasks):
     # Always return the same response whether or not the account exists --
     # otherwise this endpoint becomes a way to check which emails have
     # accounts here.
@@ -146,7 +153,13 @@ def forgot_password(payload: ForgotPasswordRequest):
     if teacher:
         token = store.create_password_reset_token(teacher["id"])
         reset_url = f"{settings.canonical_origin}/reset-password/{token}"
-        send_password_reset_email(teacher["email"], teacher["name"], reset_url)
+        # Queued, so the response takes the same time whether or not the
+        # account exists. Sending inline made a real address measurably
+        # slower than an unknown one, which is the same leak the identical
+        # response body exists to prevent.
+        background.add_task(
+            send_password_reset_email, teacher["email"], teacher["name"], reset_url
+        )
     return {"ok": True}
 
 

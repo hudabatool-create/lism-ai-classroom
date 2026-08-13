@@ -110,6 +110,13 @@ class Settings(BaseSettings):
     smtp_username: str | None = None
     smtp_password: str | None = None
     smtp_from_email: str = "no-reply@lism.local"
+    # Encrypt the connection before sending. On by default and it should stay
+    # on for any mail server reached over the internet -- a password reset link
+    # is a temporary key to someone's account, and sending one in the clear is
+    # handing it to whoever is between here and the mail server. Only turn this
+    # off for a relay inside a trusted network, and note that credentials are
+    # refused on an unencrypted connection regardless.
+    smtp_starttls: bool = True
 
     # Without a key, activity generation falls back to starter templates: the
     # structure and pedagogy are right but the questions are generic, because
