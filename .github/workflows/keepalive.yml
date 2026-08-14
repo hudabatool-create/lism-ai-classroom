@@ -15,34 +15,36 @@ on:
     # 06:17 UTC daily. An odd minute on purpose -- GitHub drops jobs scheduled
     # on the hour when its queue is busy, and a skipped run is invisible.
     - cron: "17 6 * * *"
-  workflow_dispatch:        # so it can be run by hand to check it works
+  workflow_dispatch: # so it can be run by hand to check it works
 
 jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
+      # Deliberately plain shell. The first version parsed the reply with an
+      # inline Python script, whose own quoting had to survive both YAML and
+      # the shell -- it did not, and the workflow failed to parse at all.
+      # Checking for one field with grep cannot break that way.
       - name: Query the database through the API
         run: |
-          set -euo pipefail
+          set -uo pipefail
           URL="https://lism-ai-classroom-production.up.railway.app/api/health/db"
 
-          # Railway sleeps idle containers, so the first call can be slow.
-          # Three tries before calling it a failure.
           for attempt in 1 2 3; do
             if body=$(curl -sS --max-time 60 "$URL"); then
-              echo "$body" | python3 -c '
-import json, sys
-d = json.load(sys.stdin)
-if d.get("connect_error"):
-    sys.exit(f"database refused the connection: {d[\"connect_error\"]}")
-print(f"ok - {d[\"db_host\"]} ({d[\"db_region\"]}) responded in {d[\"median_ms\"]}ms")
-'
-              exit 0
+              echo "$body"
+              if echo "$body" | tr -d ' ' | grep -q '"connect_error":null'; then
+                echo "Database answered a real query -- it stays awake."
+                exit 0
+              fi
+              echo "::error::The API replied but the database refused the connection."
+              echo "::error::The project may already be paused: check the Supabase dashboard."
+              exit 1
             fi
-            echo "attempt $attempt failed, retrying in 30s"
+            echo "Attempt $attempt could not reach LISM. Retrying in 30s..."
             sleep 30
           done
 
-          echo "::error::Could not reach the database in three attempts."
-          echo "::error::LISM may be down, or the project may already be paused."
+          echo "::error::Could not reach LISM in three attempts over 90 seconds."
+          echo "::error::The backend may be down, or the database paused."
           exit 1
