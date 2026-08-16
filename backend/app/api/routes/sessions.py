@@ -1,6 +1,8 @@
 import io
 
 import qrcode
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -67,6 +69,7 @@ def get_session(session_id: str, teacher: dict = Depends(get_current_teacher)):
         "students": students,
         "responses": responses,
         "current_stage": current_stage,
+        "server_time": datetime.now(timezone.utc).isoformat(),
         "online_student_ids": list(manager.online_student_ids(session["code"])),
         "student_statuses": statuses,
         "status_summary": summarize_statuses(statuses),
@@ -264,6 +267,13 @@ def get_session_by_code(code: str):
         "session": session,
         "activity": {"id": activity["id"], "title": activity["title"], "manifest": manifest},
         "current_stage": current_stage,
+        # The countdown is derived from when the stage started, and every
+        # device was measuring that against its own clock. A phone seven
+        # seconds out from the teacher's laptop showed a countdown seven
+        # seconds out, and neither person could tell which was right. Sending
+        # the server's own time lets each device correct for its offset, so
+        # everyone counts down from the same clock.
+        "server_time": datetime.now(timezone.utc).isoformat(),
     }
 
 

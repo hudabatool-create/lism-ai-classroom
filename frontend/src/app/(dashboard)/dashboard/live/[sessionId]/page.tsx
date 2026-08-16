@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import StagePreview from "@/components/StagePreview";
 import StatCard from "@/components/StatCard";
 import { api } from "@/lib/api";
+import { serverNow, syncClock } from "@/lib/serverClock";
 import { playTimerSound, TIMER_SOUND_OPTIONS, type TimerSound } from "@/lib/timerSound";
 import type {
   Activity,
@@ -79,7 +80,7 @@ function useCountdown(startedAt: string | null, durationSeconds: number | null, 
       return;
     }
     const endsAt = new Date(startedAt).getTime() + durationSeconds * 1000;
-    const tick = () => setRemaining(Math.max(0, Math.round((endsAt - Date.now()) / 1000)));
+    const tick = () => setRemaining(Math.max(0, Math.round((endsAt - serverNow()) / 1000)));
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
@@ -116,6 +117,8 @@ const SESSION_TYPE_LABELS: Record<string, string> = {
 };
 
 interface SessionDetail {
+  /** The server's own clock, so no screen depends on this device's. */
+  server_time?: string;
   session: SessionInfo;
   activity: Activity;
   students: Student[];
@@ -145,7 +148,11 @@ export default function LiveSessionPage() {
     api
       .get<SessionDetail>(`/api/sessions/${sessionId}`)
       .then((d) => {
-        if (!cancelled) setDetail(d);
+        if (cancelled) return;
+        // Correct this laptop's clock against the server's, so the teacher's
+        // countdown and every student's agree even when the devices don't.
+        syncClock(d.server_time);
+        setDetail(d);
       })
       // Without this the page sat on "Loading session..." forever whenever
       // the request failed, with nothing on screen explaining why.

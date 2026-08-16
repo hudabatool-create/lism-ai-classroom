@@ -5,6 +5,7 @@ import { type FormEvent, useCallback, useEffect, useRef, useState } from "react"
 import Logo from "@/components/Logo";
 import { api } from "@/lib/api";
 import { installCopyGuard } from "@/lib/copyGuard";
+import { serverNow, syncClock } from "@/lib/serverClock";
 import { collectAnswers, watchSubmits } from "@/lib/harvest";
 import { installLockstep, type LockstepHandle } from "@/lib/lockstep";
 import { playTimerSound, type TimerSound } from "@/lib/timerSound";
@@ -38,7 +39,7 @@ function useStageTimer(startedAt: string | null, durationSeconds: number | null,
     }
     if (!startedAt) return;
     const endsAt = new Date(startedAt).getTime() + durationSeconds * 1000;
-    const tick = () => setRemaining(Math.max(0, Math.round((endsAt - Date.now()) / 1000)));
+    const tick = () => setRemaining(Math.max(0, Math.round((endsAt - serverNow()) / 1000)));
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
@@ -99,6 +100,8 @@ interface StudentReport {
 }
 
 interface JoinInfo {
+  /** The server's own clock, so no screen depends on this device's. */
+  server_time?: string;
   session: {
     code: string;
     status: string;
@@ -200,6 +203,7 @@ export default function JoinPage() {
       .get<JoinInfo>(`/api/join/${code}`)
       .then(async (data) => {
         if (cancelled) return;
+        syncClock(data.server_time);
         setInfo(data);
         currentStageRef.current = data.current_stage;
         setTimer({
@@ -607,6 +611,7 @@ export default function JoinPage() {
     if (!studentId) return;
     try {
       const data = await api.get<JoinInfo>(`/api/join/${code}`);
+      syncClock(data.server_time);
       const running = data.session.stage_status === "running" || data.session.stage_status === "paused";
       currentStageRef.current = data.current_stage;
       stageStartedRef.current = running;

@@ -154,6 +154,49 @@ for heading, expect in (("Quick Check", True), ("Check for Understanding", True)
     check(f'"{heading}" is recognised as the progress check',
           ("progress-check" in got) == expect, str(got))
 
+# ---------------------------------------------------------------------------
+# Two ways a real deck lost slides, both found in an uploaded Grade 9 lesson.
+# ---------------------------------------------------------------------------
+
+# 1. Slides inside a wrapper div. A regex closing on the FIRST </div> swallowed
+#    the opening slide into the wrapper's match, so the title slide was never
+#    seen as a section at all.
+WRAPPED = """<html><body>
+<div class="deck">
+  <div class="slides">
+    <section class="slide active"><div class="center"><h1>Python Data Types</h1></div></section>
+    <section class="slide"><h2>Starter</h2><p>Recommended: 5 min</p></section>
+    <section class="slide"><h2>Main Teaching</h2><p>Recommended: 10 min</p></section>
+    <section class="slide"><h2>Exit Ticket</h2><p>Recommended: 5 min</p></section>
+  </div>
+</div>
+<div class="nav"><button>Next</button></div>
+</body></html>"""
+
+wrapped = infer_stages_from_html(WRAPPED)
+labels = [s["label"] for s in wrapped]
+check("slides inside a wrapper div are all found", len(wrapped) == 4,
+      f"got {len(wrapped)}: {labels}")
+check("the opening slide is not swallowed by the wrapper",
+      any("Python Data Types" in l for l in labels), str(labels))
+check("the page wrapper itself never becomes a stage",
+      not any(l.strip() in ("", "deck", "slides") for l in labels), str(labels))
+
+# 2. A rubric slide headed "Rubric - Main Activity /10" matches main-activity
+#    first. With that id already taken by the real Main Activity, the block was
+#    skipped entirely and the slide disappeared.
+COLLIDE = """<html><body><div class="deck">
+  <section class="slide"><h2>Main Activity</h2><p>Recommended: 10 min</p></section>
+  <section class="slide"><h2>Rubric &mdash; Main Activity /10</h2></section>
+  <section class="slide"><h2>Exit Ticket</h2><p>Recommended: 5 min</p></section>
+</div></body></html>"""
+
+collide = infer_stages_from_html(COLLIDE)
+got = [s["id"] for s in collide]
+check("a colliding heading falls through to its own pattern",
+      got == ["main-activity", "rubric", "exit-ticket"], str(got))
+check("no slide is lost to the collision", len(collide) == 3, f"{len(collide)}")
+
 NOTHING = "<html><body><div class='wrap'><p>Just a page.</p></div></body></html>"
 check("an activity with no sections stays a single unmanaged stage",
       infer_stages_from_html(NOTHING) == [], "must not invent stages")

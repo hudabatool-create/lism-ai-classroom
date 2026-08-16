@@ -14,7 +14,8 @@ than rejecting them.
 import html as html_lib
 import json
 import re
-from collections import Counter
+from collections import Counter, defaultdict
+from html.parser import HTMLParser
 from typing import NamedTuple
 
 MANIFEST_PATTERN = re.compile(
@@ -265,11 +266,116 @@ class _Block(NamedTuple):
     entry: _StagePattern | None
 
 
-def _match_stage(*texts: str) -> _StagePattern | None:
+class _SectionFinder(HTMLParser):
+    """Finds every section/div/article, with its nesting understood.
+
+    A regex cannot do this. `<(section|div)...>(.*?)</\\1>` stops at the FIRST
+    closing tag, so a deck wrapped in `<div class="deck">` has its opening
+    slides swallowed into the wrapper's match and never seen at all -- which
+    is exactly how a title slide went missing from a real lesson.
+
+    Records each element's parent so siblings can be grouped afterwards, the
+    same way the student page picks a deck's slides: the biggest group of
+    siblings is the lesson, and a stray card nested inside one of them is not.
+    """
+
+    WRAPPERS = ("section", "div", "article")
+
+    def __init__(self, html: str) -> None:
+        super().__init__(convert_charrefs=False)
+        self.html = html
+        # Absolute offset of the start of each line, so getpos() can be turned
+        # into an index into the original text.
+        self.line_start = [0]
+        for line in html.splitlines(keepends=True):
+            self.line_start.append(self.line_start[-1] + len(line))
+        self.open: list[tuple[str, str, int, int]] = []   # tag, attrs, body start, id
+        self.found: list[dict] = []
+        self.next_id = 0
+
+    def _offset(self) -> int:
+        line, col = self.getpos()
+        return self.line_start[line - 1] + col
+
+    def handle_starttag(self, tag, attrs):
+        if tag not in self.WRAPPERS:
+            return
+        raw = self.html.find(">", self._offset())
+        if raw == -1:
+            return
+        attr_text = " ".join(
+            f'{k}="{v}"' for k, v in attrs if v is not None
+        )
+        self.open.append((tag, attr_text, raw + 1, self.next_id))
+        self.next_id += 1
+
+    def handle_endtag(self, tag):
+        if tag not in self.WRAPPERS:
+            return
+        # Unclosed inner tags are common in hand-written HTML; close back to
+        # the nearest matching open tag rather than giving up on the document.
+        for i in range(len(self.open) - 1, -1, -1):
+            if self.open[i][0] == tag:
+                open_tag, attr_text, body_start, node_id = self.open.pop(i)
+                del self.open[i:]
+                self.found.append(
+                    {
+                        "tag": open_tag,
+                        "attrs": attr_text,
+                        "inner": self.html[body_start:self._offset()],
+                        "start": body_start,
+                        "id": node_id,
+                        "parent": self.open[-1][3] if self.open else -1,
+                    }
+                )
+                return
+
+
+def _candidate_sections(html: str) -> list[dict]:
+    """The group of sibling elements that looks like the lesson's sections.
+
+    Every wrapper in the document is a candidate; the right ones are the
+    largest group of siblings that carry headings. That excludes the outer
+    page wrapper (one child of nothing) and the cards nested inside a slide.
+    """
+    parser = _SectionFinder(html)
+    try:
+        parser.feed(html)
+    except Exception:                      # malformed markup -- use what we got
+        pass
+
+    by_parent: dict[int, list[dict]] = defaultdict(list)
+    for node in parser.found:
+        by_parent[node["parent"]].append(node)
+
+    def score(group: list[dict]) -> tuple[int, int]:
+        with_heading = sum(1 for n in group if _HEADING_RE.search(n["inner"]))
+        return (with_heading, len(group))
+
+    best: list[dict] = []
+    for group in by_parent.values():
+        if score(group) > score(best):
+            best = group
+    return sorted(best, key=lambda n: n["start"])
+
+
+def _match_stage(*texts: str, taken: set[str] | None = None) -> _StagePattern | None:
+    """The best pattern for this section that is still available.
+
+    Falls through when the best match is a one-per-lesson stage that an earlier
+    section already claimed. A deck's rubric slide headed "Rubric - Main
+    Activity /10" matches main-activity first; with the Main Activity itself
+    already holding that id, the old code skipped the block entirely and the
+    rubric slide vanished from the lesson. Trying the next matching pattern
+    finds `rubric`, which is what it always was.
+    """
     haystack = " ".join(t for t in texts if t)
     for entry in _STAGE_PATTERNS:
-        if entry.pattern.search(haystack):
-            return entry
+        if not entry.pattern.search(haystack):
+            continue
+        if not entry.repeatable and taken and entry.id in taken:
+            continue          # already used by an earlier section -- keep looking
+        return entry
     return None
 
 
@@ -335,21 +441,28 @@ def infer_stages_from_html(html: str) -> list[dict]:
     keeps the honest single-stage fallback.
     """
     blocks: list[_Block] = []
-    for tag, attrs, inner in _SECTION_RE.findall(html):
+    taken: set[str] = set()
+    for node in _candidate_sections(html):
+        attrs, inner = node["attrs"], node["inner"]
         markers = " ".join(_ATTR_RE.findall(attrs))
         heading_html = _HEADING_RE.search(inner)
         heading = _TAGS_RE.sub(" ", heading_html.group(1)) if heading_html else ""
         class_match = _CLASS_RE.search(attrs)
         anchor_match = _ANCHOR_RE.search(attrs) or _ID_RE.search(attrs)
+        # `taken` grows as we go, so a later section that would collide with an
+        # earlier one falls through to its own pattern instead of vanishing.
+        entry = _match_stage(markers, heading, taken=taken)
+        if entry and not entry.repeatable:
+            taken.add(entry.id)
         blocks.append(
             _Block(
-                tag=tag.lower(),
+                tag=node["tag"].lower(),
                 markers=markers,
                 classes=frozenset((class_match.group(1) if class_match else "").split()),
                 anchor=anchor_match.group(1) if anchor_match else "",
                 heading=heading,
                 inner=inner,
-                entry=_match_stage(markers, heading),
+                entry=entry,
             )
         )
 
