@@ -111,6 +111,49 @@ check("data-stage is used as the anchor",
       [s.get("anchor") for s in deck] == ["starter", "main-activity", "exit-ticket"],
       f"{[s.get('anchor') for s in deck]}")
 
+# ---------------------------------------------------------------------------
+# The Progress Check: the hinge question between teaching and working alone.
+#
+# It has to be recognised by the several names a lesson might give it, without
+# swallowing the other stages whose headings also contain "check" -- Self Check
+# closes a lesson, and Fact-Check the AI is its own activity.
+# ---------------------------------------------------------------------------
+CHECKS = """<html><body>
+<section class="slide"><h2>Section 5 &middot; Main Teaching</h2><p>Recommended Duration: 10 minutes</p></section>
+<section class="slide"><h2>Section 6 &middot; Progress Check</h2><p>Recommended Duration: 2 minutes</p></section>
+<section class="slide"><h2>Section 7 &middot; Main Task</h2><p>Recommended Duration: 10 minutes</p></section>
+<section class="slide"><h2>Section 8 &middot; Self Check</h2><p>Recommended Duration: 3 minutes</p></section>
+</body></html>"""
+
+checks = infer_stages_from_html(CHECKS)
+ids_found = [s["id"] for s in checks]
+check("the Progress Check is recovered", "progress-check" in ids_found, str(ids_found))
+check("it does not swallow Self Check", "self-check" in ids_found, str(ids_found))
+check("teaching and main task are still their own stages",
+      "main-teaching" in ids_found and "main-activity" in ids_found, str(ids_found))
+check("stages stay in document order",
+      ids_found == ["main-teaching", "progress-check", "main-activity", "self-check"],
+      str(ids_found))
+
+pc = next(s for s in checks if s["id"] == "progress-check")
+check("the Progress Check takes its declared 2 minutes",
+      pc["durationSeconds"] == 120, f'{pc["durationSeconds"]}s')
+check("the Progress Check carries no marks",
+      pc["marks"] is None,
+      "a mark here makes guessing safer than admitting confusion")
+
+# Other names a teacher's deck might use for the same thing.
+for heading, expect in (("Quick Check", True), ("Check for Understanding", True),
+                        ("Hinge Question", True), ("Mini-Check", True)):
+    html = ("<html><body>"
+            f"<section class='slide'><h2>Starter</h2></section>"
+            f"<section class='slide'><h2>{heading}</h2></section>"
+            f"<section class='slide'><h2>Exit Ticket</h2></section>"
+            "</body></html>")
+    got = [s["id"] for s in infer_stages_from_html(html)]
+    check(f'"{heading}" is recognised as the progress check',
+          ("progress-check" in got) == expect, str(got))
+
 NOTHING = "<html><body><div class='wrap'><p>Just a page.</p></div></body></html>"
 check("an activity with no sections stays a single unmanaged stage",
       infer_stages_from_html(NOTHING) == [], "must not invent stages")

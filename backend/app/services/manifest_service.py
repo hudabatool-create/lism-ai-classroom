@@ -193,6 +193,12 @@ _STAGE_PATTERNS: list[_StagePattern] = [
     _p("starter", "Starter", "starter", r"\bstarter\b|\bretrieval\b|\bdo now\b|\bbell work\b|\bwarm[\s\-]?up\b|quick recall"),
     _p("main-teaching", "Main Teaching", "teaching", r"main teaching|\bteaching\b|knowledge box|worked example|\bi do\b|\binput\b"),
     _p("guided-practice", "Guided Practice", "practice", r"guided practice|\bwe do\b|\bpractice\b"),
+    # The hinge question between teaching and independent work. Deliberately
+    # not a bare "check" -- that would swallow Self Check and Fact-Check the
+    # AI, which are their own stages elsewhere in the framework.
+    _p("progress-check", "Progress Check", "progress-check",
+       r"progress check|quick check|hinge question|check for understanding|"
+       r"check your understanding|\bmini[\s\-]?check\b"),
     _p("main-activity", "Main Activity", "main-activity", r"main activity|main task|\byou do\b|\bindependent\b"),
     _p("rubric", "Mark Scheme", "rubric", r"\brubric\b|mark scheme|\bmarking\b"),
     _p("connection", "Connection Link", "connection", r"\buae\b|cross[\s\-]?curricular|\bconnection\b|\bai link\b"),
@@ -273,7 +279,7 @@ def _match_stage(*texts: str) -> _StagePattern | None:
 # and told the teacher nothing about the pacing the lesson was written for.
 _STAGE_MINUTES = {
     "title": 1, "keywords": 2, "objectives": 2,
-    "starter": 5, "main-teaching": 10, "guided-practice": 5,
+    "starter": 5, "main-teaching": 10, "guided-practice": 5, "progress-check": 2,
     "main-activity": 10, "rubric": 2, "connection": 3,
     "exit-ticket": 5, "reflection": 2,
     "scenario": 3, "explore": 5, "observation": 4, "analysis": 5,
