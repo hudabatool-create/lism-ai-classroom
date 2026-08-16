@@ -18,6 +18,7 @@ No time-based transitions between sections.
 No logic anywhere in the file that controls or enforces lesson pacing (no setInterval, setTimeout or Date-based gating for pacing purposes).
 Instead, show only the recommended duration beside each section title as instructional guidance, e.g.
 Starter (Recommended Duration: 5 minutes)
+Progress Check (Recommended Duration: 2 minutes)
 Main Task (Recommended Duration: 10 minutes)
 UAE & Cross-Curricular (Recommended Duration: 3 minutes)
 Exit Ticket (Recommended Duration: 5 minutes)
