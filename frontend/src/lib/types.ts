@@ -42,6 +42,12 @@ export interface Stage {
 
 export interface LessonManifest {
   managed: boolean;
+  /**
+   * Whether the activity ever tells LISM a mark. False means it marks itself
+   * on screen and reports nothing, so every mark arrives awaiting review --
+   * worth telling the teacher before the lesson, not after.
+   */
+  reportsMarks?: boolean;
   lessonType: string;
   subject: string;
   grade: string;

@@ -627,6 +627,7 @@ export default function LiveSessionPage() {
           running={session.stage_status === "running" || session.stage_status === "paused"}
           stages={stages}
           currentStageIndex={session.current_stage_index}
+          reportsMarks={activity.manifest.reportsMarks}
         />
       )}
 

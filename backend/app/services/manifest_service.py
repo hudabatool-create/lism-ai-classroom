@@ -26,12 +26,28 @@ MANIFEST_PATTERN = re.compile(
 DEFAULT_STAGE_DURATION_SECONDS = 600
 
 
+# Does this activity tell LISM anything at all?
+#
+# The contract is one postMessage per marked answer. An activity that ignores
+# it marks itself beautifully on screen and reports nothing, so every mark
+# lands as "awaiting your review" and the teacher marks thirty students by
+# hand without ever being told why. LISM harvests the answer text regardless,
+# but it cannot recover a mark that was never sent.
+_REPORTS_RE = re.compile(r"lism:event|lism-activity-response", re.IGNORECASE)
+
+
+def reports_to_lism(html: str) -> bool:
+    return bool(_REPORTS_RE.search(html))
+
+
 def extract_manifest(html: str, *, fallback_title: str = "") -> dict:
     match = MANIFEST_PATTERN.search(html)
     if match:
         try:
             raw = json.loads(match.group(1))
-            return _normalize_manifest(raw)
+            manifest = _normalize_manifest(raw)
+            manifest["reportsMarks"] = reports_to_lism(html)
+            return manifest
         except (json.JSONDecodeError, ValueError, TypeError):
             pass
 
@@ -47,9 +63,12 @@ def extract_manifest(html: str, *, fallback_title: str = "") -> dict:
         manifest["managed"] = True
         manifest["stagesInferred"] = True
         manifest["totalMarks"] = _coerce_marks(sum(s["marks"] or 0 for s in manifest["stages"]))
+        manifest["reportsMarks"] = reports_to_lism(html)
         return manifest
 
-    return _unmanaged_manifest(fallback_title)
+    fallback = _unmanaged_manifest(fallback_title)
+    fallback["reportsMarks"] = reports_to_lism(html)
+    return fallback
 
 
 def _coerce_marks(value) -> float | None:

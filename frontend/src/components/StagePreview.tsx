@@ -34,6 +34,8 @@ interface Props {
   running: boolean;
   /** Every stage, so the teacher can look back at one they have already run. */
   stages: Stage[];
+  /** False when the activity never reports its own marks. */
+  reportsMarks?: boolean;
   /** How far the lesson has got; nothing beyond this can be looked at. */
   currentStageIndex: number;
 }
@@ -45,6 +47,7 @@ export default function StagePreview({
   running,
   stages,
   currentStageIndex,
+  reportsMarks,
 }: Props) {
   /**
    * A stage the teacher is looking back at, or null for the live one.
@@ -321,6 +324,18 @@ export default function StagePreview({
             <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
               This section is longer than the panel &mdash; scroll inside it to see the rest.
               Students see the whole section on their own screens.
+            </p>
+          )}
+
+          {reportsMarks === false && (
+            // The activity marks itself but never tells LISM, so every mark
+            // will land as "awaiting your review". Said before the lesson,
+            // this is a five-second expectation; discovered afterwards, it is
+            // thirty students marked by hand with no explanation.
+            <p className="mt-3 rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-900 dark:bg-sky-950 dark:text-sky-200">
+              This activity does not send its marks to LISM, so every answer will arrive for you
+              to mark rather than scored automatically. Everything else works normally &mdash;
+              answers, timing and the report are unaffected.
             </p>
           )}
 
