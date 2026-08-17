@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import { installLockstep, type LockstepHandle } from "@/lib/lockstep";
 import type { Activity } from "@/lib/types";
 
 /**
@@ -19,6 +20,13 @@ import type { Activity } from "@/lib/types";
  * It creates no student data: no session, no participant, no responses. The
  * iframe is loaded with ?preview=1 so an activity built to the LISM contract
  * also suppresses its own event emission.
+ *
+ * Asking the activity to move turned out not to be enough. Decks built to
+ * this prompt ignore every LISM command when ?preview=1 is set -- reasonably,
+ * since that is what "emit nothing in preview" was taken to mean -- so Next
+ * did nothing at all. The activity is therefore served through LISM's own
+ * origin and moved directly, the same way the student page does it, with the
+ * command still sent for activities that do listen.
  */
 export default function ActivityPreviewPage() {
   const params = useParams<{ id: string }>();
@@ -27,6 +35,9 @@ export default function ActivityPreviewPage() {
   const [error, setError] = useState<string | null>(null);
   const [index, setIndex] = useState(0);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const lockstepRef = useRef<LockstepHandle | null>(null);
+  // False once the iframe has loaded and no sections were recognised.
+  const [pinned, setPinned] = useState<boolean | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,13 +61,40 @@ export default function ActivityPreviewPage() {
     (i: number) => {
       const stage = stages[i];
       if (!stage) return;
+      // Move it ourselves first: this is the part that always works.
+      lockstepRef.current?.showStage(stage.anchor || stage.id, i, stage.label);
+      // Then ask, for activities that do listen. The id, not the object --
+      // that is what a deck compares against its own data-stage attribute.
       iframeRef.current?.contentWindow?.postMessage(
-        { type: "lism:command", command: "start_stage", stage, stageIndex: i },
+        {
+          type: "lism:command",
+          command: "start_stage",
+          stage: stage.anchor || stage.id,
+          stageId: stage.id,
+          stageData: stage,
+          stageIndex: i,
+        },
         "*"
       );
     },
     [stages]
   );
+
+  function handleLoad() {
+    try {
+      const doc = iframeRef.current?.contentDocument;
+      if (doc) {
+        lockstepRef.current?.destroy();
+        lockstepRef.current = installLockstep(doc);
+        setPinned(lockstepRef.current !== null);
+      }
+    } catch {
+      setPinned(false);
+    }
+    showStage(index);
+  }
+
+  useEffect(() => () => lockstepRef.current?.destroy(), []);
 
   // Re-send on every move and once the iframe is ready. Cheap, and it keeps
   // the activity in step even if it loaded after the first command was sent.
@@ -103,6 +141,14 @@ export default function ActivityPreviewPage() {
           Back to My Activities
         </Link>
       </div>
+
+      {pinned === false && !unmanaged && (
+        <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+          LISM could not find separate sections in this activity, so Previous and Next have
+          nothing to step through here &mdash; and students will see all of it at once during a
+          lesson. Starting and ending stages will still pace and time the class.
+        </p>
+      )}
 
       {unmanaged && (
         <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300">
@@ -164,8 +210,10 @@ export default function ActivityPreviewPage() {
 
       <iframe
         ref={iframeRef}
-        onLoad={() => showStage(index)}
-        src={`${api.base}/api/activities/${activityId}/raw?preview=1`}
+        onLoad={handleLoad}
+        // LISM's own origin, not the backend's -- being same-origin is what
+        // lets the preview move the activity rather than only ask it to.
+        src={`/activity/${activityId}/raw?preview=1`}
         title={`Preview of ${activity.title}`}
         className="mt-4 min-h-0 flex-1 w-full rounded-2xl border border-slate-200 bg-white dark:border-slate-800"
       />
