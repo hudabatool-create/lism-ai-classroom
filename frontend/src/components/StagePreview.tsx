@@ -77,6 +77,8 @@ export default function StagePreview({
   const [settling, setSettling] = useState(false);
   const heightRef = useRef(FALLBACK_HEIGHT);
   const settleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Heights already tried for the current stage -- see measure(). */
+  const triedRef = useRef<Set<number>>(new Set());
   // null until the iframe loads; false means the activity has no sections we
   // can recognise, which the teacher needs told rather than left to infer
   // from a preview that shows the whole lesson at once.
@@ -176,6 +178,28 @@ export default function StagePreview({
       return;
     }
 
+    // A height we have already been at this stage means we are going round in
+    // a circle, so stop and keep the taller one.
+    //
+    // Some decks size themselves to the window -- body{height:100vh} with the
+    // slide filling what the fixed bars leave. The section's bottom edge is
+    // then always the same distance below the frame however tall the frame
+    // gets, so measuring it asks the frame to shrink, and shrinking hides
+    // content, which asks it to grow again. A real Grade 5 Arabic deck sat
+    // there swapping between 416px and 348px several times a second for as
+    // long as the stage was running, and the teacher had that going on beside
+    // them while trying to teach.
+    //
+    // Neither number is wrong; the deck simply has no fixed height to find.
+    // The taller one is the one that hides nothing, so that is the answer.
+    if (triedRef.current.has(height)) {
+      heightRef.current = Math.max(current, height);
+      if (iframeRef.current) iframeRef.current.style.height = `${heightRef.current}px`;
+      commitHeight();
+      return;
+    }
+    triedRef.current.add(height);
+
     // Resize the frame itself, without telling React.
     //
     // Converging takes two or three passes, and putting each one through state
@@ -193,6 +217,9 @@ export default function StagePreview({
     if (!lockstepRef.current) return;
     const target = shownStage ? shownStage.anchor || shownStage.id : null;
     setSettling(true);
+    // A new section is a new shape, so last section's heights say nothing
+    // about this one.
+    triedRef.current.clear();
     lockstepRef.current.showStage(shownRunning ? target : null, shownIndex, shownStage?.label);
     // After the new section is on screen, not before -- its height is the
     // thing that just changed.
