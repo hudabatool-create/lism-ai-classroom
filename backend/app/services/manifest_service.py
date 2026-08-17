@@ -189,10 +189,25 @@ class _StagePattern(NamedTuple):
     type: str
     pattern: re.Pattern[str]
     repeatable: bool = False
+    #: The same section names in Arabic, matched as plain substrings.
+    #:
+    #: Not folded into the regex above because every pattern there leans on
+    #: \b, and a Python word boundary is defined on Latin word characters --
+    #: it never fires between Arabic letters, so \bالتهيئة\b matches nothing
+    #: at all. This is the same trap that stopped Arabic submit buttons being
+    #: recognised in the student player.
+    words: tuple[str, ...] = ()
 
 
-def _p(id_: str, label: str, type_: str, regex: str, repeatable: bool = False) -> _StagePattern:
-    return _StagePattern(id_, label, type_, re.compile(regex, re.IGNORECASE), repeatable)
+def _p(
+    id_: str,
+    label: str,
+    type_: str,
+    regex: str,
+    repeatable: bool = False,
+    words: tuple[str, ...] = (),
+) -> _StagePattern:
+    return _StagePattern(id_, label, type_, re.compile(regex, re.IGNORECASE), repeatable, words)
 
 
 _STAGE_PATTERNS: list[_StagePattern] = [
@@ -208,21 +223,36 @@ _STAGE_PATTERNS: list[_StagePattern] = [
     # "title" only as a standalone marker/word -- so a data-stage="title" or a
     # "Title Slide" heading counts, but class="card-title" does not.
     _p("title", "Title", "title", r"title[\s\-_]?slide|\bcover\b|(?:^|\s)title(?:\s|$)"),
-    _p("keywords", "Keywords & Objective", "keywords", r"\bkeyword|\bvocabulary\b"),
-    _p("objectives", "Learning Objectives", "objectives", r"\bobjective|success criteria|learning outcome|\bi can\b"),
-    _p("starter", "Starter", "starter", r"\bstarter\b|\bretrieval\b|\bdo now\b|\bbell work\b|\bwarm[\s\-]?up\b|quick recall"),
-    _p("main-teaching", "Main Teaching", "teaching", r"main teaching|\bteaching\b|knowledge box|worked example|\bi do\b|\binput\b"),
+    _p("keywords", "Keywords & Objective", "keywords", r"\bkeyword|\bvocabulary\b",
+       words=("المفردات", "الكلمات المفتاحية", "مفردات")),
+    _p("objectives", "Learning Objectives", "objectives", r"\bobjective|success criteria|learning outcome|\bi can\b",
+       words=("الأهداف", "أهداف الدرس", "هدف الدرس", "معايير النجاح", "نواتج التعلم")),
+    _p("starter", "Starter", "starter", r"\bstarter\b|\bretrieval\b|\bdo now\b|\bbell work\b|\bwarm[\s\-]?up\b|quick recall",
+       words=("التهيئة", "الاستهلالي", "استهلالي", "تمهيد", "المراجعة السابقة")),
+    _p("main-teaching", "Main Teaching", "teaching", r"main teaching|\bteaching\b|knowledge box|worked example|\bi do\b|\binput\b",
+       words=("الشرح الرئيسي", "الشرح", "شرح الدرس", "التعلم الجديد", "المثال المحلول")),
     _p("guided-practice", "Guided Practice", "practice", r"guided practice|\bwe do\b|\bpractice\b"),
     # The hinge question between teaching and independent work. Deliberately
     # not a bare "check" -- that would swallow Self Check and Fact-Check the
     # AI, which are their own stages elsewhere in the framework.
     _p("progress-check", "Progress Check", "progress-check",
        r"progress check|quick check|hinge question|check for understanding|"
-       r"check your understanding|\bmini[\s\-]?check\b"),
-    _p("main-activity", "Main Activity", "main-activity", r"main activity|main task|\byou do\b|\bindependent\b"),
-    _p("rubric", "Mark Scheme", "rubric", r"\brubric\b|mark scheme|\bmarking\b"),
-    _p("connection", "Connection Link", "connection", r"\buae\b|cross[\s\-]?curricular|\bconnection\b|\bai link\b"),
-    _p("exit-ticket", "Exit Ticket", "exit-ticket", r"exit[\s\-]?ticket|\bexit\b"),
+       r"check your understanding|\bmini[\s\-]?check\b",
+       words=("فحص التقدم", "تحقق سريع", "التحقق من الفهم", "سؤال مفصلي")),
+    # Choosing ALL / MOST / SOME. Its own moment in the lesson: the teacher
+    # holds the class here while everyone picks a level, so it needs a stage
+    # of its own and a minute, not the five-minute default.
+    _p("pathway", "Choose Your Pathway", "pathway",
+       r"choose your (?:pathway|path|level)|pathway|pick your (?:path|level)",
+       words=("اختر مسار", "مسار التعلم", "اختيار المسار")),
+    _p("main-activity", "Main Activity", "main-activity", r"main activity|main task|\byou do\b|\bindependent\b",
+       words=("النشاط الرئيسي", "المهمة الرئيسية", "المهمة الأساسية")),
+    _p("rubric", "Mark Scheme", "rubric", r"\brubric\b|mark scheme|\bmarking\b",
+       words=("سلم التقييم", "سلّم التقييم", "سجل الدرجات", "معايير التقييم", "توزيع الدرجات")),
+    _p("connection", "Connection Link", "connection", r"\buae\b|cross[\s\-]?curricular|\bconnection\b|\bai link\b",
+       words=("الهوية الوطنية", "الإمارات", "الربط بين المواد", "الربط")),
+    _p("exit-ticket", "Exit Ticket", "exit-ticket", r"exit[\s\-]?ticket|\bexit\b",
+       words=("تذكرة الخروج", "بطاقة الخروج")),
     # --- Simulation / coding ------------------------------------------------
     _p("scenario", "Scenario", "scenario", r"\bscenario\b|\bthe story\b|\bbriefing\b|\bstory\b"),
     _p("explore", "Explore the Variables", "explore", r"\bexplore\b|\bvariables?\b|\bcontrols?\b|\bsandbox\b"),
@@ -257,7 +287,8 @@ _STAGE_PATTERNS: list[_StagePattern] = [
     _p("justify", "Justify Your Choice", "justify", r"\bjustif"),
     _p("explain", "Explain", "explain", r"\bexplain\b"),
     _p("review", "Review", "review", r"\breview\b"),
-    _p("reflection", "Reflection", "reflection", r"\breflection\b|\breflect\b|3-2-1|self[\s\-]?assessment"),
+    _p("reflection", "Reflection", "reflection", r"\breflection\b|\breflect\b|3-2-1|self[\s\-]?assessment",
+       words=("التأمل", "تأمل", "التقييم الذاتي")),
 ]
 
 _SECTION_RE = re.compile(
@@ -390,12 +421,33 @@ def _match_stage(*texts: str, taken: set[str] | None = None) -> _StagePattern | 
     """
     haystack = " ".join(t for t in texts if t)
     for entry in _STAGE_PATTERNS:
-        if not entry.pattern.search(haystack):
+        if not entry.pattern.search(haystack) and not any(w in haystack for w in entry.words):
             continue
         if not entry.repeatable and taken and entry.id in taken:
             continue          # already used by an earlier section -- keep looking
         return entry
     return None
+
+
+# The recommended time a section states for itself, e.g. "Recommended: 10 min"
+# or "الموصى به: 10 دقائق".
+#
+# Both master prompts require this beside every section title, so when it is
+# there it beats anything LISM can infer -- it is the time the teacher who
+# wrote the lesson planned for. It matters most where inference is weakest: an
+# Arabic deck whose sections LISM cannot name would otherwise take the flat
+# five-minute default for all eleven, putting five minutes on a title slide
+# and five on a two-minute progress check, and handing the teacher a lesson
+# whose clock bears no relation to their plan.
+#
+# Anchored to an explicit recommendation rather than any number followed by
+# "minutes", so a title slide reading "Total time: 50 minutes" does not become
+# a fifty-minute stage.
+_STATED_DURATION_RE = re.compile(
+    r"(?:recommended|suggested|allow(?:ed)?|الموصى\s*به|المقترح|المدة\s*المقترحة)"
+    r"[^0-9\n]{0,24}(\d{1,2})\s*(?:min\b|mins\b|minutes?\b|دقيقة|دقائق|دقيقتان|دقيقتين)",
+    re.IGNORECASE,
+)
 
 
 # How long each part of a LISM lesson is meant to take. Used only when the
@@ -405,7 +457,7 @@ def _match_stage(*texts: str, taken: set[str] | None = None) -> _StagePattern | 
 _STAGE_MINUTES = {
     "title": 1, "keywords": 2, "objectives": 2,
     "starter": 5, "main-teaching": 10, "guided-practice": 5, "progress-check": 2,
-    "main-activity": 10, "rubric": 2, "connection": 3,
+    "main-activity": 10, "rubric": 2, "connection": 3, "pathway": 1,
     "exit-ticket": 5, "reflection": 2,
     "scenario": 3, "explore": 5, "observation": 4, "analysis": 5,
     "problem": 3, "predict": 3, "debug": 5, "write": 8, "tests": 3,
@@ -414,23 +466,36 @@ _STAGE_MINUTES = {
 _DEFAULT_STAGE_MINUTES = 5
 
 # "Recommended Duration: 5 minutes", "(3 min)", "10 minutes + feedback"
-_DURATION_RE = re.compile(r"(\d{1,3})\s*(?:minutes?|mins?\b|m\b)", re.IGNORECASE)
+_DURATION_RE = re.compile(
+    r"(\d{1,3})\s*(?:minutes?|mins?\b|m\b|دقيقة|دقائق|دقيقتان|دقيقتين)", re.IGNORECASE)
+
+# No single section of a lesson is worth more than half an hour. The cap is
+# what stops a title slide reading "Total time: 50 minutes" -- or in Arabic,
+# "الوقت الإجمالي: 50 دقيقة" -- from being read as a fifty-minute stage and
+# putting the whole lesson's clock on slide one.
+_MAX_RECOVERED_MINUTES = 30
 
 
 def _recovered_duration(stage_id: str, section_html: str) -> int:
     """Seconds for a stage the activity didn't time itself.
 
     Prefers what the lesson says out loud -- decks built from the LISM prompt
-    print "Recommended Duration: 5 minutes" beside the slide title -- and
-    otherwise falls back to the framework's own shape rather than one flat
-    number for everything.
+    print "Recommended: 5 minutes" beside the slide title, and an Arabic deck
+    prints "الموصى به: 5 دقائق" -- and otherwise falls back to the framework's
+    own shape rather than one flat number for everything.
+
+    The explicit recommendation is tried first and over the whole section,
+    because that is the teacher's own plan for the section and beats anything
+    inferred. Only if there is none does the loose form get a look, and only
+    over the opening, where a duration badge sits.
     """
-    text = _TAGS_RE.sub(" ", section_html)[:600]
-    match = _DURATION_RE.search(text)
-    if match:
-        minutes = int(match.group(1))
-        if 1 <= minutes <= 60:
-            return minutes * 60
+    text = _TAGS_RE.sub(" ", section_html)
+    for candidate, haystack in ((_STATED_DURATION_RE, text), (_DURATION_RE, text[:600])):
+        match = candidate.search(haystack)
+        if match:
+            minutes = int(match.group(1))
+            if 1 <= minutes <= _MAX_RECOVERED_MINUTES:
+                return minutes * 60
     return _STAGE_MINUTES.get(stage_id, _DEFAULT_STAGE_MINUTES) * 60
 
 
@@ -533,7 +598,19 @@ def infer_stages_from_html(html: str) -> list[dict]:
         if entry is None:
             # An unrecognised peer: named by its own heading, timed by whatever
             # it says out loud, and worth no marks we would have to invent.
-            stage_id = block.anchor or f"section-{position}"
+            #
+            # Except the very first one. A lesson opens on its title, and a
+            # title slide names the topic rather than announcing itself, so it
+            # matches nothing in any language -- an Arabic deck opened on
+            # "الجملة الاسمية والجملة الفعلية" and got the flat five-minute
+            # default, putting five minutes on the class's title screen. Only
+            # when nothing else has claimed `title`, so a deck that does label
+            # its title slide still wins.
+            if not found and "title" not in seen_single:
+                stage_id = "title"
+                seen_single.add("title")
+            else:
+                stage_id = block.anchor or f"section-{position}"
             if stage_id in used_ids:
                 continue
             used_ids.add(stage_id)

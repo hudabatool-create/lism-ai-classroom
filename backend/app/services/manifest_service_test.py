@@ -211,6 +211,72 @@ check("a declared manifest is still preferred over recovery",
 check("declared stages carry an anchor field",
       all("anchor" in s for s in declared["stages"]))
 
+# ---------------------------------------------------------------------------
+# An Arabic lesson has to be paced like any other.
+#
+# The section patterns were English-only, so a Grade 5 Arabic deck a teacher
+# generated recovered all eleven of its slides but could name none of them:
+# every stage took the flat five-minute default. The class got five minutes on
+# the title screen and five on a two-minute progress check, and the teacher's
+# stage list read slide-1 to slide-11 with no idea which was the Main Activity.
+#
+# The headings below are that deck's, verbatim.
+# ---------------------------------------------------------------------------
+ARABIC = """<html lang="ar" dir="rtl"><body><div class="deck-container">
+ <div class="slide" id="slide-1"><h1>الجملة الاسمية والجملة الفعلية</h1>
+   <p>الوقت الإجمالي: 50 دقيقة</p></div>
+ <div class="slide" id="slide-2"><h2>المفردات والأهداف التعليمية</h2>
+   <span>الموصى به: 2 دقيقة</span></div>
+ <div class="slide" id="slide-3"><h2>النشاط الاستهلالي: مراجعة الدرس السابق</h2>
+   <span>الموصى به: 5 دقائق</span></div>
+ <div class="slide" id="slide-4"><h2>اختر مسار التعلم الخاص بك</h2></div>
+ <div class="slide" id="slide-5"><h2>الشرح الرئيسي: نموذج بناء الجملة</h2>
+   <span>الموصى به: 10 دقائق</span></div>
+ <div class="slide" id="slide-6"><h2>فحص التقدم السريع</h2>
+   <span>الموصى به: 2 دقيقة</span></div>
+ <div class="slide" id="slide-7"><h2>النشاط الرئيسي</h2>
+   <span>الموصى به: 10 دقائق</span></div>
+ <div class="slide" id="slide-8"><h2>الهوية الوطنية والربط بين المواد</h2>
+   <span>الموصى به: 3 دقائق</span></div>
+ <div class="slide" id="slide-9"><h2>تذكرة الخروج</h2>
+   <span>الموصى به: 5 دقائق</span></div>
+ <div class="slide" id="slide-10"><h2>سجل الدرجات والتقييم الذاتي</h2></div>
+ <div class="slide" id="slide-11"><h2>التأمل وشهادة الإنجاز</h2>
+   <span>الموصى به: 5 دقائق</span></div>
+</div></body></html>"""
+
+arabic = infer_stages_from_html(ARABIC)
+ids = [s["id"] for s in arabic]
+check("every slide of the Arabic deck is recovered", len(arabic) == 11, str(len(arabic)))
+check("the Arabic sections are named, not numbered",
+      ids == ["title", "keywords", "starter", "pathway", "main-teaching",
+              "progress-check", "main-activity", "connection", "exit-ticket",
+              "rubric", "reflection"], str(ids))
+
+mins = {s["id"]: s["durationSeconds"] // 60 for s in arabic}
+check("the title screen is not given five minutes", mins["title"] == 1, f"{mins['title']} min")
+check("the whole lesson's time is not read as the title's duration",
+      mins["title"] != 50, "\"الوقت الإجمالي: 50 دقيقة\" states the lesson, not the slide")
+check("a duration stated in Arabic is read", mins["main-teaching"] == 10, f"{mins['main-teaching']} min")
+check("the progress check keeps its two minutes", mins["progress-check"] == 2, f"{mins['progress-check']} min")
+check("pathway choice is a minute, not five", mins["pathway"] == 1, f"{mins['pathway']} min")
+check("a section stating no time falls back to its framework timing",
+      mins["rubric"] == 2, f"{mins['rubric']} min")
+check("every stage is anchored to its own element",
+      [s["anchor"] for s in arabic] == [f"slide-{i}" for i in range(1, 12)],
+      str([s["anchor"] for s in arabic]))
+
+# The English equivalent of the trap above must not be sprung either.
+TOTAL_TIME = """<html><body><div class="deck">
+ <div class="slide" id="s1"><h1>Photosynthesis</h1><p>Total time: 50 minutes</p></div>
+ <div class="slide" id="s2"><h2>Starter</h2><span>Recommended: 5 min</span></div>
+ <div class="slide" id="s3"><h2>Main Teaching</h2><span>Recommended: 10 min</span></div>
+</div></body></html>"""
+english = {s["id"]: s["durationSeconds"] // 60 for s in infer_stages_from_html(TOTAL_TIME)}
+check("an English title slide stating the lesson total is not a 50-minute stage",
+      english.get("title") == 1, f"{english.get('title')} min")
+
+
 passed = sum(results)
 print(f"\nTOTAL {passed} passed, {len(results) - passed} failed")
 sys.exit(0 if all(results) else 1)
