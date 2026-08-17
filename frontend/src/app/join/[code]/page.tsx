@@ -186,11 +186,12 @@ export default function JoinPage() {
   const applyLockstepRef = useRef<(() => void) | null>(null);
   const resyncRef = useRef<(() => void) | null>(null);
   const harvestRef = useRef<(() => void) | null>(null);
-  // Stages whose answer has already reached the teacher, however it got there.
-  // Stops LISM reading an answer out of an activity that reported its own, and
-  // stops the same answer being sent twice when a student presses submit and
-  // the stage then ends.
-  const reportedStagesRef = useRef<Set<string>>(new Set());
+  // Stages the activity reported itself. LISM never harvests those -- the
+  // activity knows its own marks and questions better than we can infer them.
+  const activityReportedRef = useRef<Set<string>>(new Set());
+  // The last text sent per stage, so re-submitting identical work is a no-op
+  // while genuinely new work always gets through.
+  const lastSentRef = useRef<Map<string, string>>(new Map());
   const unwatchSubmitsRef = useRef<(() => void) | null>(null);
   // Bumped each time the activity finishes loading, so guards that reach into
   // its document are reinstalled against the new one.
@@ -375,7 +376,7 @@ export default function JoinPage() {
 
       // The activity reported this stage itself, so LISM must not also read
       // the answer out of the page and send it a second time.
-      if (stageId) reportedStagesRef.current.add(stageId);
+      if (stageId) activityReportedRef.current.add(stageId);
 
       api
         .post(`/api/join/${code}/response`, { student_id: studentId, stage_id: stageId, correct, answer, mark })
@@ -414,12 +415,21 @@ export default function JoinPage() {
     const doc = iframeRef.current?.contentDocument;
     const section = lockstepRef.current?.currentSection();
     if (!stage || !doc || !section || !studentId) return;
-    if (reportedStagesRef.current.has(stage.id)) return;
+    // An activity that reports its own answers is left alone entirely.
+    if (activityReportedRef.current.has(stage.id)) return;
 
     const { text, filled } = collectAnswers(section, doc);
     if (!filled) return;
 
-    reportedStagesRef.current.add(stage.id);
+    // Send it again every time they submit, not once.
+    //
+    // Locking after the first submission was why a five-question Exit Ticket
+    // reached the teacher as one answer: harvesting fired on the first Submit,
+    // when only question one was filled in, and then never ran again. Each
+    // capture reads the whole section, so the newest one supersedes the last
+    // and `replace` tells the server to overwrite rather than append.
+    if (lastSentRef.current.get(stage.id) === text) return;
+    lastSentRef.current.set(stage.id, text);
     api
       .post(`/api/join/${code}/response`, {
         student_id: studentId,
@@ -427,6 +437,7 @@ export default function JoinPage() {
         correct: null,
         answer: text,
         mark: null,
+        replace: true,
       })
       .then(() => {
         setSubmittedCount((n) => n + 1);
@@ -434,9 +445,8 @@ export default function JoinPage() {
         setTimeout(() => setFlash(null), 3000);
       })
       .catch(() => {
-        // Let a genuine failure be retried; a 409 means the activity already
-        // reported this stage itself, which is the outcome we wanted anyway.
-        reportedStagesRef.current.delete(stage.id);
+        // Let the next submission try again rather than losing the answer.
+        lastSentRef.current.delete(stage.id);
       });
   }, [studentId, code]);
 
@@ -954,11 +964,20 @@ export default function JoinPage() {
                 value={
                   report.estimated_score === null
                     ? "Not scored"
-                    : report.max_score
-                      ? `${report.estimated_score} / ${report.max_score}`
-                      : // Marks were awarded but the activity declares no total.
-                        // Showing "Not scored" here would hide real work.
-                        `${report.estimated_score} mark${report.estimated_score === 1 ? "" : "s"}`
+                    : // Nothing scored yet but work is waiting to be marked.
+                      //
+                      // "0 / 20" was shown to students who had answered every
+                      // question and scored 9 out of 10 inside the activity --
+                      // because that activity never reported its marks, so
+                      // LISM held none. A zero is a claim about a child's work
+                      // and this had no right to make it.
+                      report.estimated_score === 0 && report.pending_review
+                      ? `Awaiting your teacher${report.max_score ? ` · ${report.max_score} to be marked` : ""}`
+                      : report.max_score
+                        ? `${report.estimated_score} / ${report.max_score}`
+                        : // Marks were awarded but the activity declares no total.
+                          // Showing "Not scored" here would hide real work.
+                          `${report.estimated_score} mark${report.estimated_score === 1 ? "" : "s"}`
                 }
               />
               <ReportTile

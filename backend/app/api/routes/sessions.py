@@ -253,6 +253,10 @@ class ResponseRequest(BaseModel):
     correct: bool | None = None
     answer: str = ""
     mark: float | None = None
+    # True when `answer` is the whole section read at once, so it already
+    # contains everything sent before and should overwrite it. False when the
+    # activity is reporting one more question of its own, which is appended.
+    replace: bool = False
 
 
 @router.get("/join/{code}")
@@ -374,9 +378,14 @@ async def submit_response(code: str, payload: ResponseRequest):
             detail=f"Your teacher hasn't started \"{label}\" yet. Your answer was not saved — wait for this section to begin.",
         )
 
-    if await astore.has_response_for_stage(session["id"], payload.student_id, stage_id):
-        raise HTTPException(status_code=409, detail="You've already submitted an answer for this part of the lesson")
-    response = await astore.add_response(session["id"], payload.student_id, stage_id, payload.correct, payload.answer, payload.mark)
+    # A stage is rarely one question. Treating the first submission as final
+    # showed the teacher only question one of a five-question Exit Ticket, and
+    # a single line of a ten-mark Main Task -- so later work now updates the
+    # same row rather than being refused. See add_response for the two modes.
+    response = await astore.add_response(
+        session["id"], payload.student_id, stage_id, payload.correct,
+        payload.answer, payload.mark, replace=payload.replace,
+    )
     await astore.set_needs_help(payload.student_id, False)
     await manager.broadcast(session["code"], {"type": "response_submitted", "response": response}, roles=("teacher",))
     await broadcast_status_update(session, activity)

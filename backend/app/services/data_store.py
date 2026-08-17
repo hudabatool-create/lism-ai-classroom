@@ -725,21 +725,72 @@ class DataStore:
         correct: bool | None,
         answer: str,
         mark: float | None = None,
+        *,
+        replace: bool = False,
     ) -> dict:
+        """Record what a student has answered for one stage of the lesson.
+
+        A stage keeps ONE row per student, because that is what the marking
+        panel, the report and the gradebook column all assume. But a stage is
+        rarely one question: an Exit Ticket has five, a Main Task has four DOK
+        parts, and students answer them one at a time.
+
+        Treating the first submission as final was wrong, and hid most of the
+        lesson from the teacher -- a five-question Exit Ticket showed only
+        question one, and a Main Task worth ten marks showed a single line.
+
+        So a second submission for the same stage updates the row:
+
+        `replace` -- the caller has just read the WHOLE section, so the new
+        text already contains everything the old one had. Overwrite it.
+
+        otherwise -- the activity reported one more question of its own. Append
+        the new answer, and add its marks to the running total, so four DOK
+        parts arrive as four answers and ten marks rather than the last one.
+        """
         with SessionLocal() as db:
-            row = Response(
-                id=_id(),
-                session_id=session_id,
-                student_id=student_id,
-                stage_id=stage_id,
-                correct=correct,
-                answer=answer,
-                mark=mark,
-                submitted_at=_now(),
+            existing = db.scalar(
+                select(Response).where(
+                    Response.session_id == session_id,
+                    Response.student_id == student_id,
+                    Response.stage_id == stage_id,
+                )
             )
-            db.add(row)
+            if existing is None:
+                row = Response(
+                    id=_id(),
+                    session_id=session_id,
+                    student_id=student_id,
+                    stage_id=stage_id,
+                    correct=correct,
+                    answer=answer,
+                    mark=mark,
+                    submitted_at=_now(),
+                )
+                db.add(row)
+                db.commit()
+                return _response_dict(row)
+
+            if replace:
+                existing.answer = answer
+                existing.correct = correct
+                existing.mark = mark
+            else:
+                if answer and answer not in (existing.answer or ""):
+                    existing.answer = f"{existing.answer}\n\n{answer}" if existing.answer else answer
+                if mark is not None:
+                    existing.mark = (existing.mark or 0) + mark
+                # Mixed right and wrong across a stage is neither, so stop
+                # claiming a single verdict for the whole stage.
+                if correct is not None and existing.correct is not None and correct != existing.correct:
+                    existing.correct = None
+                elif existing.correct is None:
+                    existing.correct = correct
+            # The time of the latest work, which is what a teacher watching a
+            # live feed and an inspector reading a report both mean by it.
+            existing.submitted_at = _now()
             db.commit()
-            return _response_dict(row)
+            return _response_dict(existing)
 
     def list_responses(self, session_id: str) -> list[dict]:
         with SessionLocal() as db:
