@@ -322,6 +322,63 @@ check("once further in, going back is allowed", on() === "p2", `showing ${on()}`
 
 lock5?.destroy();
 
+// ---------------------------------------------------------------------------
+// A deck with one stray </div>.
+//
+// A Grade 5 Arabic lesson had an extra closing tag in its rubric section, so
+// the browser ended the deck wrapper early and parented the last three
+// sections on <body> instead. Slides were grouped by parent and the largest
+// group won, so those three were silently dropped: the teacher started
+// Connection, Exit Ticket and Reflection in turn and every student screen
+// stayed on the rubric. The lesson had no ending.
+//
+// The markup below is that deck's shape exactly.
+// ---------------------------------------------------------------------------
+const BROKEN = `<!DOCTYPE html><html lang="ar" dir="rtl"><body>
+  <div id="deck">
+    <section class="slide" data-stage="title"><h1>الجملة الاسمية</h1></section>
+    <section class="slide" data-stage="main-activity"><h2>المهمة</h2></section>
+    <section class="slide" data-stage="rubric">
+      <h2>سلّم التقييم</h2>
+      <div class="wrap"><table><tr><td>DOK 1</td></tr></table>
+      </div>
+    </div>            <!-- the stray tag: #deck ends here -->
+    </section>
+    <section class="slide" data-stage="connection"><h2>الربط</h2></section>
+    <section class="slide" data-stage="exit-ticket"><h2>بطاقة الخروج</h2></section>
+    <section class="slide" data-stage="reflection"><h2>التأمل</h2></section>
+</body></html>`;
+
+const dom6 = new JSDOM(BROKEN, { pretendToBeVisual: true, runScripts: "dangerously" });
+const doc6 = dom6.window.document;
+
+// The browser really does split them -- if it ever stops, this test is moot.
+const parents = new Set(
+  [...doc6.querySelectorAll("[data-stage]")].map((s) => s.parentElement?.id || "body"));
+check("the stray tag really does split the sections across two parents",
+  parents.size === 2, `parents: ${[...parents].join(", ")}`);
+
+const lock6 = installLockstep(doc6);
+const showing6 = () =>
+  [...doc6.querySelectorAll("[data-stage]")]
+    .filter((s) => s.style.display !== "none")
+    .map((s) => s.dataset.stage)
+    .join(",");
+
+lock6?.showStage("rubric", 2, "Rubric");
+check("the rubric still shows", showing6() === "rubric", showing6());
+
+for (const [id, index] of [["connection", 3], ["exit-ticket", 4], ["reflection", 5]]) {
+  lock6?.showStage(id, index, id);
+  check(`a section orphaned by the stray tag still shows: ${id}`,
+    showing6() === id, `showing ${showing6() || "(nothing)"}`);
+}
+
+lock6?.showStage("title", 0, "Title");
+check("and going back over the break still works", showing6() === "title", showing6());
+
+lock6?.destroy();
+
 const passed2 = results.filter(Boolean).length;
 console.log(`\nTOTAL ${passed2} passed, ${results.length - passed2} failed`);
 process.exit(results.every(Boolean) ? 0 : 1);

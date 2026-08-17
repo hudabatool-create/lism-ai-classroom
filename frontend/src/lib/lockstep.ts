@@ -69,6 +69,17 @@ function findSlides(doc: Document): HTMLElement[] {
     }
     if (matches.length < 2) continue;
 
+    // An explicit marker settles it -- no grouping, take them all.
+    //
+    // A deck with one stray </div> had its last three sections parented
+    // outside the deck wrapper. Grouping by parent kept the larger group and
+    // silently dropped the rest, so the class stuck on the rubric for the
+    // final three stages of the lesson while the teacher advanced through
+    // them. An element carrying data-stage is a slide whatever the browser
+    // made of the surrounding markup, and AI-written HTML is not always
+    // well-formed.
+    if (selector.startsWith("[data-")) return matches;
+
     const byParent = new Map<Element, HTMLElement[]>();
     for (const el of matches) {
       const parent = el.parentElement;
@@ -81,6 +92,21 @@ function findSlides(doc: Document): HTMLElement[] {
     let best: HTMLElement[] = [];
     for (const group of byParent.values()) {
       if (group.length > best.length) best = group;
+    }
+
+    // Same rescue for a deck that marks slides by class rather than by
+    // data-stage: a slide separated from its siblings by broken markup is
+    // still recognisably one of them, so long as it carries the same tag and
+    // the same classes. Matched on the shape of the winning group, which a
+    // stray <section> in a footer will not share.
+    const classes = best[0]?.className.trim();
+    if (classes) {
+      const shape = `${best[0].tagName}.${classes}`;
+      const group = new Set(best);
+      // matches is in document order, so the rescued slides land in the right
+      // places rather than on the end.
+      best = matches.filter(
+        (el) => group.has(el) || `${el.tagName}.${el.className.trim()}` === shape);
     }
     // Two siblings could be a header and a footer; three of a kind is a deck.
     // [data-stage] is explicit enough to trust at two.

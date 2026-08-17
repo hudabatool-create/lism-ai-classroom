@@ -38,6 +38,8 @@ export default function ActivityPreviewPage() {
   const lockstepRef = useRef<LockstepHandle | null>(null);
   // False once the iframe has loaded and no sections were recognised.
   const [pinned, setPinned] = useState<boolean | null>(null);
+  // Set when the activity's own JavaScript will not run at all.
+  const [scriptError, setScriptError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -80,6 +82,36 @@ export default function ActivityPreviewPage() {
     [stages]
   );
 
+  /**
+   * Whether the activity's own JavaScript can run.
+   *
+   * An AI-written deck sometimes closes a bracket one too many times. The
+   * browser then throws the whole script away, and everything the file does
+   * for itself -- timers, model answers, validation, marking -- silently does
+   * nothing. LISM still paces the lesson and still captures written answers,
+   * so the teacher gets no hint anything is wrong until they are standing in
+   * front of the class wondering why the timer never starts.
+   *
+   * The activity is same-origin here, so its script text can simply be read
+   * and handed to the browser's own JavaScript parser. `new Function` parses
+   * and returns; nothing is ever called, so none of the deck's code runs.
+   */
+  function findScriptError(doc: Document): string | null {
+    const scripts = Array.from(doc.querySelectorAll("script"));
+    for (const script of scripts) {
+      const type = script.getAttribute("type");
+      // Data blocks (the manifest) and modules are not plain scripts.
+      if (type && !/javascript|^text\/js$/i.test(type)) continue;
+      if (script.src || !script.textContent?.trim()) continue;
+      try {
+        new Function(script.textContent);
+      } catch (e) {
+        return e instanceof Error ? e.message : String(e);
+      }
+    }
+    return null;
+  }
+
   function handleLoad() {
     try {
       const doc = iframeRef.current?.contentDocument;
@@ -87,6 +119,7 @@ export default function ActivityPreviewPage() {
         lockstepRef.current?.destroy();
         lockstepRef.current = installLockstep(doc);
         setPinned(lockstepRef.current !== null);
+        setScriptError(findScriptError(doc));
       }
     } catch {
       setPinned(false);
@@ -141,6 +174,22 @@ export default function ActivityPreviewPage() {
           Back to My Activities
         </Link>
       </div>
+
+      {scriptError && (
+        <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-800 dark:bg-red-950 dark:text-red-300">
+          <p className="font-semibold">This activity&apos;s own code has an error and will not run.</p>
+          <p className="mt-1">
+            LISM will still pace the class through the stages and still collect what students write,
+            but anything the file does for itself &mdash; its timers, model answers, self-marking and
+            the marks it sends back &mdash; will do nothing. Paste the error below back to the AI that
+            wrote the activity, ask it to fix it and to check every bracket is closed exactly once,
+            then upload the corrected file.
+          </p>
+          <code className="mt-2 block rounded bg-red-100 px-2 py-1 font-mono dark:bg-red-900">
+            {scriptError}
+          </code>
+        </div>
+      )}
 
       {pinned === false && !unmanaged && (
         <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300">
