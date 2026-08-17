@@ -119,6 +119,55 @@ doc.querySelector("#sec-8 button").dispatchEvent(new dom.window.MouseEvent("clic
 await new Promise((r) => setTimeout(r, 20));
 check("the watcher stops cleanly", fired === 1, `fired ${fired}×`);
 
+
+// ---------------------------------------------------------------------------
+// An Arabic lesson must report answers like any other.
+//
+// Submit detection was English-only, so a Grade 5 Arabic deck whose button
+// reads "إرسال" reported nothing at all: the teacher's panel showed
+// "0 of 1 answered" for a class that had answered everything. In a bilingual
+// school that is not an edge case.
+// ---------------------------------------------------------------------------
+const ARABIC = `<!DOCTYPE html><html lang="ar" dir="rtl"><body>
+  <section data-stage="starter">
+    <h3>ما الفرق بين الاسم والفعل؟</h3>
+    <textarea id="s1">الطالبُ اسم و يكتبُ فعل</textarea>
+    <h3>حدّد نوع الكلمة: «المدرسةُ»</h3>
+    <select id="s2"><option value="">اختر</option><option selected>اسم</option><option>فعل</option></select>
+    <button onclick="checkStarter()">إرسال التهيئة</button>
+  </section>
+</body></html>`;
+
+const dom6 = new JSDOM(ARABIC, { pretendToBeVisual: true });
+const doc6 = dom6.window.document;
+global.CSS = dom6.window.CSS;
+Object.defineProperty(dom6.window.HTMLElement.prototype, "offsetParent", {
+  get() { return this.ownerDocument.body; },
+});
+
+let arabicFired = 0;
+const stopAr = watchSubmits(doc6, () => { arabicFired += 1; });
+doc6.querySelector("button").dispatchEvent(new dom6.window.MouseEvent("click", { bubbles: true }));
+await new Promise((r) => setTimeout(r, 20));
+check('an Arabic submit button ("إرسال") is recognised', arabicFired === 1, `fired ${arabicFired}×`);
+
+const ar = collectAnswers(doc6.querySelector('[data-stage="starter"]'), doc6);
+check("the Arabic written answer is captured", ar.text.includes("الطالبُ اسم"), ar.text.slice(0, 40));
+check("the Arabic dropdown choice is captured", ar.text.includes("اسم"), ar.text.slice(0, 60));
+check("both Arabic fields counted", ar.filled === 2, `filled: ${ar.filled}`);
+stopAr();
+
+// A button that is not a submit, in Arabic, must still be ignored.
+let strayAr = 0;
+const stopAr2 = watchSubmits(doc6, () => { strayAr += 1; });
+const stray = doc6.createElement("button");
+stray.textContent = "مسح";           // "clear"
+doc6.body.appendChild(stray);
+stray.dispatchEvent(new dom6.window.MouseEvent("click", { bubbles: true }));
+await new Promise((r) => setTimeout(r, 20));
+check("an Arabic non-submit button is ignored", strayAr === 0, `fired ${strayAr}×`);
+stopAr2();
+
 const passed = results.filter(Boolean).length;
 console.log(`\nTOTAL ${passed} passed, ${results.length - passed} failed`);
 process.exit(results.every(Boolean) ? 0 : 1);

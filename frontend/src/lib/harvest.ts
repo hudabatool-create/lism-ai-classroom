@@ -30,8 +30,34 @@ const ANSWER_FIELDS = [
   "[contenteditable='true']",
 ].join(",");
 
-/** A control that means "I am done with this answer". */
+/** A control that means "I am done with this answer".
+ *
+ * English-only matching meant no Arabic lesson ever reported anything. A
+ * Grade 5 Arabic deck's button reads "إرسال" — send — and nothing here
+ * recognised it, so the teacher's panel sat on "0 of 1 answered" for a class
+ * that had answered everything. In a bilingual school that is not an edge
+ * case, it is half the timetable.
+ */
 const SUBMIT_TEXT = /\b(submit|check|done|finish(ed)?|save|answer|mark it|complete)\b/i;
+
+/**
+ * The same idea in the other languages this school teaches in.
+ *
+ * Matched as plain substrings rather than with \b, because JavaScript word
+ * boundaries are defined on Latin word characters and never fire in Arabic.
+ */
+const SUBMIT_WORDS_INTL = [
+  "إرسال", "أرسل", "ارسال", "تحقق", "تأكيد", "سلّم", "تسليم", // Arabic
+  "جمع کریں", "بھیجیں",                                        // Urdu
+  "envoyer", "soumettre", "vérifier", "valider",               // French
+  "enviar", "comprobar", "entregar",                           // Spanish
+];
+
+function looksLikeSubmit(text: string): boolean {
+  if (SUBMIT_TEXT.test(text)) return true;
+  const lower = text.toLowerCase();
+  return SUBMIT_WORDS_INTL.some((word) => lower.includes(word));
+}
 
 /** Fields that identify the student rather than answer anything. */
 const IDENTITY = /\b(name|class|section|date|student|roll|id)\b/i;
@@ -131,7 +157,7 @@ export function watchSubmits(doc: Document, onSubmit: () => void): () => void {
     const control = target?.closest("button, input[type='submit'], [role='button']");
     if (!control) return;
     const text = (control.textContent ?? (control as HTMLInputElement).value ?? "").trim();
-    if (text.length > 40 || !SUBMIT_TEXT.test(text)) return;
+    if (text.length > 40 || !looksLikeSubmit(text)) return;
     // After the activity's own handler, so anything it writes into the page
     // (a normalised value, a computed score) is already there to be read.
     setTimeout(onSubmit, 0);

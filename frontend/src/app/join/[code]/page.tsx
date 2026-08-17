@@ -271,7 +271,24 @@ export default function JoinPage() {
   }
 
   function sendCommand(command: string, extra: Record<string, unknown> = {}) {
-    iframeRef.current?.contentWindow?.postMessage({ type: "lism:command", command, ...extra }, "*");
+    // `stage` goes out as the plain id, because that is what an activity can
+    // match against its own data-stage attribute -- which is exactly what
+    // every generated deck tries to do:
+    //
+    //     slides.findIndex(s => s.dataset.stage === e.data.stage)
+    //
+    // Sending the whole stage object made that comparison silently false, so
+    // the deck never moved itself: it sat on whichever slide it was already
+    // showing while the teacher advanced the lesson. The full object is still
+    // available as `stageData` for anything wanting the label or marks.
+    const payload: Record<string, unknown> = { type: "lism:command", command, ...extra };
+    const stage = payload.stage as Stage | null | undefined;
+    if (stage && typeof stage === "object") {
+      payload.stage = stage.anchor || stage.id;
+      payload.stageId = stage.id;
+      payload.stageData = stage;
+    }
+    iframeRef.current?.contentWindow?.postMessage(payload, "*");
   }
 
   function sendConfig(session: JoinInfo["session"]) {
