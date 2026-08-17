@@ -24,6 +24,8 @@ const DESIGN_WIDTH = 1100;
 const FALLBACK_HEIGHT = 760;
 /** How much of the dashboard the panel may take before it scrolls instead. */
 const MAX_PANEL_HEIGHT = 460;
+/** How long to let the frame stop moving before showing it again. */
+const SETTLE_MS = 160;
 
 interface Props {
   activityId: string;
@@ -70,6 +72,11 @@ export default function StagePreview({
   const [boxWidth, setBoxWidth] = useState(DESIGN_WIDTH);
   const [loaded, setLoaded] = useState(false);
   const [contentHeight, setContentHeight] = useState(FALLBACK_HEIGHT);
+  // The panel is hidden while the frame is being sized, so the two or three
+  // reflows it takes are never seen -- one fade instead of a jumping box.
+  const [settling, setSettling] = useState(false);
+  const heightRef = useRef(FALLBACK_HEIGHT);
+  const settleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // null until the iframe loads; false means the activity has no sections we
   // can recognise, which the teacher needs told rather than left to infer
   // from a preview that shows the whole lesson at once.
@@ -107,6 +114,14 @@ export default function StagePreview({
    * Knowledge Box with a worked example are not the same shape. A fixed box
    * clipped the tall ones with no way to reach the rest of them.
    */
+  /** Tell React the height once the frame has stopped changing. */
+  const commitHeight = useCallback(() => {
+    if (settleRef.current) clearTimeout(settleRef.current);
+    settleRef.current = null;
+    setContentHeight(heightRef.current);
+    setSettling(false);
+  }, []);
+
   const measure = useCallback(() => {
     const doc = iframeRef.current?.contentDocument;
     if (!doc) return;
@@ -142,33 +157,51 @@ export default function StagePreview({
         ? section.getBoundingClientRect().bottom + (view.scrollY || 0)
         : Math.max(doc.documentElement?.scrollHeight ?? 0, doc.body?.scrollHeight ?? 0);
 
-    setContentHeight((current) => {
-      let target: number;
-      if (hidden > 8) {
-        target = current + hidden;
-      } else {
-        // The gutter goes on only when the section ends short of the frame.
-        // A slide sized to the whole screen ends exactly at the frame, so
-        // adding to it grew the frame every single pass -- which is how this
-        // ran to its limit twice, leaving a screen of nothing to scroll past.
-        target = bottom + (bottom < current - 24 ? 24 : 0);
-      }
-      const height = Math.min(Math.max(target, 240), 6000);
-      // Resizing the frame relayouts the document, which the observer reports
-      // straight back. Ignoring small differences stops that becoming a loop.
-      return Math.abs(current - height) > 8 ? height : current;
-    });
-  }, []);
+    const current = heightRef.current;
+    let target: number;
+    if (hidden > 8) {
+      target = current + hidden;
+    } else {
+      // The gutter goes on only when the section ends short of the frame.
+      // A slide sized to the whole screen ends exactly at the frame, so
+      // adding to it grew the frame every single pass -- which is how this
+      // ran to its limit twice, leaving a screen of nothing to scroll past.
+      target = bottom + (bottom < current - 24 ? 24 : 0);
+    }
+    const height = Math.min(Math.max(target, 240), 6000);
+    // Resizing the frame relayouts the document, which the observer reports
+    // straight back. Ignoring small differences stops that becoming a loop.
+    if (Math.abs(current - height) <= 8) {
+      commitHeight();
+      return;
+    }
+
+    // Resize the frame itself, without telling React.
+    //
+    // Converging takes two or three passes, and putting each one through state
+    // re-rendered the panel every time -- so starting a stage made the whole
+    // preview jump repeatedly, which is what read as flickering. The steps now
+    // happen on the element alone, and React is told once, at the end.
+    heightRef.current = height;
+    if (iframeRef.current) iframeRef.current.style.height = `${height}px`;
+    if (settleRef.current) clearTimeout(settleRef.current);
+    settleRef.current = setTimeout(commitHeight, SETTLE_MS);
+  }, [commitHeight]);
 
   /** Point the preview at whatever stage the teacher has running. */
   const apply = useCallback(() => {
     if (!lockstepRef.current) return;
     const target = shownStage ? shownStage.anchor || shownStage.id : null;
+    setSettling(true);
     lockstepRef.current.showStage(shownRunning ? target : null, shownIndex, shownStage?.label);
     // After the new section is on screen, not before -- its height is the
     // thing that just changed.
     requestAnimationFrame(measure);
-  }, [shownStage, shownIndex, shownRunning, measure]);
+    // A section that needs no resizing would never reach commitHeight, so the
+    // panel would stay hidden. Reveal it regardless after the settle window.
+    if (settleRef.current) clearTimeout(settleRef.current);
+    settleRef.current = setTimeout(commitHeight, SETTLE_MS);
+  }, [shownStage, shownIndex, shownRunning, measure, commitHeight]);
 
   useEffect(apply, [apply]);
 
@@ -205,7 +238,13 @@ export default function StagePreview({
     }
   };
 
-  useEffect(() => () => lockstepRef.current?.destroy(), []);
+  useEffect(
+    () => () => {
+      lockstepRef.current?.destroy();
+      if (settleRef.current) clearTimeout(settleRef.current);
+    },
+    []
+  );
 
   // On a wide dashboard, lay the activity out at the panel's own width rather
   // than at 1100px with dead space beside it. On a narrow one there is no room
@@ -300,6 +339,8 @@ export default function StagePreview({
                 // A mirror, not a second copy to interact with. Without this a
                 // teacher could type into it and wonder where the answer went.
                 pointerEvents: "none",
+                opacity: settling ? 0 : 1,
+                transition: "opacity 140ms ease",
                 // The scaled box is what the scroll container must measure
                 // against; the untransformed height would leave a long gap
                 // below the section.
