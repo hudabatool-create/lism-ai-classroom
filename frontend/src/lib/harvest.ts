@@ -47,10 +47,17 @@ const SUBMIT_TEXT = /\b(submit|check|done|finish(ed)?|save|answer|mark it|comple
  * boundaries are defined on Latin word characters and never fire in Arabic.
  */
 const SUBMIT_WORDS_INTL = [
-  "إرسال", "أرسل", "ارسال", "تحقق", "تأكيد", "سلّم", "تسليم", // Arabic
-  "جمع کریں", "بھیجیں",                                        // Urdu
+  // Send / check / hand in
+  "إرسال", "أرسل", "ارسال", "تحقق", "تأكيد", "سلّم", "تسليم",   // Arabic
+  // Save / record. A reflection is saved, not sent -- an Arabic deck ended
+  // its lesson on "حفظ التأمل", and that one word was the difference between
+  // a teacher seeing thirty reflections and seeing none. Every other stage
+  // in the same deck said إرسال and reported perfectly.
+  "حفظ", "احفظ", "سجل", "سجّل",                                // Arabic
+  "جمع کریں", "بھیجیں", "محفوظ کریں",                           // Urdu
   "envoyer", "soumettre", "vérifier", "valider",               // French
-  "enviar", "comprobar", "entregar",                           // Spanish
+  "enregistrer", "sauvegarder",                                // French
+  "enviar", "comprobar", "entregar", "guardar",                // Spanish
 ];
 
 function looksLikeSubmit(text: string): boolean {

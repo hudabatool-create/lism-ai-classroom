@@ -240,6 +240,41 @@ One consistent colour scheme; numbered section cards with coloured left borders;
 12. TIMING
 50-minute period — Keywords & Objectives 2 minutes, Starter 5 minutes, Knowledge Box + Guided Practice 10 minutes, Main Task 10 minutes, Connection Link 3 minutes, Exit Ticket 5 minutes, Reflection 5 minutes, plus 10 minutes reserved across the Starter, Main Task and Exit Ticket for teacher feedback and for students to explain or defend their work. These are recommended durations printed beside each section title for guidance only — they are never counted down, enforced or used to lock anything. In homework mode show the total expected time in the header and keep the per-section guidance.
 
+LENGTH IS NOT A MARK
+A real generated lesson accepted every answer that reached its minimum word
+count and then awarded 2/2, 3/3, 3/3 and 2/2 — full marks, written into the
+page as fixed text. A student typed deliberate nonsense of the right length
+into all four DOK boxes and was told they had scored 10 out of 10. A mark that
+arrives whatever the child wrote teaches them that the work was not read, and
+it is worse than no mark at all: it takes the one thing they can see of their
+own effort and makes it meaningless.
+
+So:
+- Never award a mark for meeting a word count, a character count, or for the
+  box simply being non-empty. Those decide whether an answer is ready to be
+  marked. They never decide what it is worth.
+- Never write a mark into the page as a fixed value. Every number a student
+  sees must be computed, at that moment, from what that student wrote. If you
+  can read the mark in the HTML source, it is wrong.
+- Give every DOK question its own answer key in the script: the values,
+  terms, or structures a correct answer contains, and — for prose — the two
+  or three ideas that must be present. Mark against that key.
+- Award full marks only when the required content is there; award part marks
+  when part of it is; award none when none of it is. An answer of the right
+  length containing none of the expected content scores zero for content, and
+  the feedback says which idea is missing — that sentence is the most useful
+  thing on the slide.
+- Where a machine genuinely cannot judge the work — an extended justification,
+  a diagram, an uploaded photo — do not guess a score. Award the part you can
+  check, and show the rest as "awaiting your teacher's mark". Reporting less
+  than full marks honestly is always correct; inventing full marks never is.
+- The running total is the sum of what was actually earned, labelled
+  "estimated — your teacher's mark is final", with the teacher override
+  recalculating it.
+
+Marking against a key is not optional and not the hard part of this file. It
+is the part the lesson exists for.
+
 THE FILE MUST PARSE — CHECK THIS BEFORE ANYTHING ELSE
 A real generated lesson was delivered with one extra "]" closing a data
 object, and another with one extra "</div>" inside a section. Neither is
@@ -258,7 +293,7 @@ have written the file out in several parts, this is where the parts join and
 that is exactly where the extra bracket goes.
 
 13. SELF-CHECK BEFORE YOU FINISH
-State briefly that you have verified: the file parses — every bracket in the script and every tag in the body opened and closed exactly once (state that you counted them); every locked model answer opens on submission rather than on the answer being correct; every marked question calls window.parent.postMessage with type 'lism:event', event 'student_submitted', and includes answer, mark and maxMark (state the number of call sites you wrote); each timed section holds the minimum volume of work listed above; exactly 11 sections; the sticky header never covers content and jump links land correctly at any width; nothing overlaps at 1366×768 and on a 390px-wide phone; no timers, countdowns or time-based logic anywhere in the file — only recommended durations beside section titles; all three ALL/MOST/SOME pathways generated in full with a working chooser that preserves typed, drawn and attached work when switching; every pathway including ALL graded out of the full 10 with no cap or scaling; one single pathway-appropriate Challenge / Extension Task that appears only after all four DOK questions are accepted (never one per DOK), carries no marks, and produces a content-specific achievement certificate that saves as an A4 landscape PDF offline; Main Task model answers sealed until all four graded questions are accepted; the student’s marks against the rubric visible out of 10 at all times; every model-answer toggle locked until submission, with hints separate from answers; each DOK marked on submit with a live total out of 10 and a working teacher override; every answer box validated by its declared type with a specific, actionable rejection reason; code boxes take Tab as indentation without trapping focus and preserve whitespace everywhere; the formula preview renders what was typed; the sketch pad works with mouse, finger and stylus without scrolling the page, and undo/clear behave; paste, file-choose, drag-drop and camera capture all attach an image, with limits enforced; download, print-completed and print-blank all produce correct output including code indentation, drawings and attachments; math/chem/code/RTL features present and working offline as required by the subject profile.
+State briefly that you have verified: no mark anywhere is awarded for answer length and no mark is a fixed value in the source — name the answer key each DOK question is marked against; the file parses — every bracket in the script and every tag in the body opened and closed exactly once (state that you counted them); every locked model answer opens on submission rather than on the answer being correct; every marked question calls window.parent.postMessage with type 'lism:event', event 'student_submitted', and includes answer, mark and maxMark (state the number of call sites you wrote); each timed section holds the minimum volume of work listed above; exactly 11 sections; the sticky header never covers content and jump links land correctly at any width; nothing overlaps at 1366×768 and on a 390px-wide phone; no timers, countdowns or time-based logic anywhere in the file — only recommended durations beside section titles; all three ALL/MOST/SOME pathways generated in full with a working chooser that preserves typed, drawn and attached work when switching; every pathway including ALL graded out of the full 10 with no cap or scaling; one single pathway-appropriate Challenge / Extension Task that appears only after all four DOK questions are accepted (never one per DOK), carries no marks, and produces a content-specific achievement certificate that saves as an A4 landscape PDF offline; Main Task model answers sealed until all four graded questions are accepted; the student’s marks against the rubric visible out of 10 at all times; every model-answer toggle locked until submission, with hints separate from answers; each DOK marked on submit with a live total out of 10 and a working teacher override; every answer box validated by its declared type with a specific, actionable rejection reason; code boxes take Tab as indentation without trapping focus and preserve whitespace everywhere; the formula preview renders what was typed; the sketch pad works with mouse, finger and stylus without scrolling the page, and undo/clear behave; paste, file-choose, drag-drop and camera capture all attach an image, with limits enforced; download, print-completed and print-blank all produce correct output including code indentation, drawings and attachments; math/chem/code/RTL features present and working offline as required by the subject profile.
 
 
 ================================================================================

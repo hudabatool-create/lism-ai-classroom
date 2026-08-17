@@ -168,6 +168,43 @@ await new Promise((r) => setTimeout(r, 20));
 check("an Arabic non-submit button is ignored", strayAr === 0, `fired ${strayAr}×`);
 stopAr2();
 
+// A reflection is saved, not sent.
+//
+// The same Arabic deck ended its lesson on a button reading "حفظ التأمل" -- save the
+// reflection. Every other stage said "إرسال" and reported perfectly, so the
+// teacher got every response of the lesson except the last one, with nothing
+// to say why. English decks were never caught by this: "save" was already in
+// the English list all along.
+const SAVED = `<!DOCTYPE html><html lang="ar" dir="rtl"><body>
+  <section data-stage="reflection">
+    <h3>ما الذي تعلمته اليوم؟</h3>
+    <textarea id="r1">تعلمت الفرق بين الجملة الاسمية والفعلية</textarea>
+    <button onclick="saveReflection()">حفظ التأمل</button>
+    <button onclick="reset()">إعادة التعيين</button>
+  </section>
+</body></html>`;
+
+const dom7 = new JSDOM(SAVED, { pretendToBeVisual: true });
+const doc7 = dom7.window.document;
+global.CSS = dom7.window.CSS;
+Object.defineProperty(dom7.window.HTMLElement.prototype, "offsetParent", {
+  get() { return this.ownerDocument.body; },
+});
+
+let savedFired = 0;
+const stopSave = watchSubmits(doc7, () => { savedFired += 1; });
+doc7.querySelectorAll("button")[0].dispatchEvent(new dom7.window.MouseEvent("click", { bubbles: true }));
+await new Promise((r) => setTimeout(r, 20));
+check('an Arabic save button ("حفظ") counts as a submission', savedFired === 1, `fired ${savedFired}×`);
+
+doc7.querySelectorAll("button")[1].dispatchEvent(new dom7.window.MouseEvent("click", { bubbles: true }));
+await new Promise((r) => setTimeout(r, 20));
+check('"إعادة التعيين" (reset) is still not a submission', savedFired === 1, `fired ${savedFired}×`);
+
+const refl = collectAnswers(doc7.querySelector('[data-stage="reflection"]'), doc7);
+check("the reflection text is captured", refl.filled === 1 && refl.text.includes("تعلمت"), refl.text.slice(0, 50));
+stopSave();
+
 const passed = results.filter(Boolean).length;
 console.log(`\nTOTAL ${passed} passed, ${results.length - passed} failed`);
 process.exit(results.every(Boolean) ? 0 : 1);

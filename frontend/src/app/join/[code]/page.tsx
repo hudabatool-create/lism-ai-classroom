@@ -687,6 +687,48 @@ export default function JoinPage() {
     return () => teardown.forEach((off) => off());
   }, [copyProtected, studentId, iframeLoadCount]);
 
+  /* Let the activity print its own page, not ours.
+   *
+   * A lesson that ends in an achievement certificate prints it with
+   * window.print() and an @media print block that hides everything except the
+   * certificate. Opened on its own that works: the printed page is the
+   * certificate, name and commendation and all.
+   *
+   * Inside LISM it came out blank. print() called from a frame prints the
+   * top-level document, and up here the activity's print rules do not apply
+   * at all -- so the browser printed the student page, with the lesson inside
+   * it reduced to an empty box. A child who finished the challenge task got a
+   * sheet of nothing.
+   *
+   * Focusing the frame first is what makes the browser treat it as the thing
+   * being printed. */
+  useEffect(() => {
+    let win: Window | null = null;
+    let native: (() => void) | null = null;
+    try {
+      win = iframeRef.current?.contentWindow ?? null;
+      if (!win) return;
+      native = win.print.bind(win);
+      win.print = () => {
+        try {
+          win?.focus();
+        } catch {
+          /* focus refused: print anyway, which is what happened before */
+        }
+        native?.();
+      };
+    } catch {
+      return; // not same-origin -- nothing we can do from here
+    }
+    return () => {
+      try {
+        if (win && native) win.print = native;
+      } catch {
+        /* the frame is gone, and so is the override */
+      }
+    };
+  }, [iframeLoadCount]);
+
   // Focus Mode: driven by the teacher's focus_monitoring setting, which
   // defaults on for an assessment but is now switchable mid-lesson either
   // way. Detects tab switches, window switching/minimizing and leaving the
