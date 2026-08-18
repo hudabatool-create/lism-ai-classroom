@@ -379,6 +379,78 @@ check("and going back over the break still works", showing6() === "title", showi
 
 lock6?.destroy();
 
+// ---------------------------------------------------------------------------
+// A deck's own "Waiting for your teacher" curtain, left hanging.
+//
+// A Grade 8 deck -- correct in every other respect: full manifest, rubric with
+// objective flags, reporting exactly to contract -- drew a full-screen curtain
+// when LISM ended a stage, and removed it on `resume` but not on `start_stage`.
+// Every stage after the first was therefore invisible. The right slide was
+// active underneath the whole time, and the only way through was to reload,
+// which threw away every mark the student had earned. That is how a rubric
+// that worked perfectly came to look broken.
+// ---------------------------------------------------------------------------
+const CURTAINED = `<!DOCTYPE html><html><body>
+  <div id="deck">
+    <section class="slide" data-stage="starter"><h2>Starter</h2></section>
+    <section class="slide" data-stage="main-activity"><h2>Main Activity</h2></section>
+    <section class="slide" data-stage="rubric"><h2>Mark Scheme</h2></section>
+  </div>
+  <div class="navbar" style="position:fixed;bottom:0;left:0;right:0;height:58px">nav</div>
+</body></html>`;
+
+const dom7 = new JSDOM(CURTAINED, { pretendToBeVisual: true });
+const doc7 = dom7.window.document;
+
+// jsdom has no layout, so rectangles must be supplied. The curtain covers the
+// window; the deck's navigation bar is a 58px strip and must survive.
+dom7.window.innerWidth = 1000;
+dom7.window.innerHeight = 800;
+Object.defineProperty(dom7.window.HTMLElement.prototype, "getBoundingClientRect", {
+  value() {
+    if (this.id === "waiting") return { width: 1000, height: 800, top: 0, left: 0 };
+    if (this.classList.contains("navbar")) return { width: 1000, height: 58, top: 742, left: 0 };
+    return { width: 1000, height: 700, top: 0, left: 0 };
+  },
+});
+
+const lock7 = installLockstep(doc7);
+const visible7 = () =>
+  [...doc7.querySelectorAll("[data-stage]")]
+    .filter((s) => s.style.display !== "none")
+    .map((s) => s.dataset.stage)
+    .join(",");
+
+lock7?.showStage("starter", 0, "Starter");
+check("the first stage shows", visible7() === "starter", visible7());
+
+// The deck draws its curtain when the stage ends, exactly as that deck does.
+const curtain = doc7.createElement("div");
+curtain.id = "waiting";
+curtain.textContent = "Waiting for your teacher\u2026";
+curtain.style.cssText = "position:fixed;top:0;left:0;right:0;bottom:0;z-index:50";
+doc7.body.appendChild(curtain);
+
+lock7?.showStage("main-activity", 1, "Main Activity");
+check("the next stage is shown", visible7() === "main-activity", visible7());
+check("the deck's leftover curtain is taken down",
+  curtain.style.display === "none",
+  `display: ${curtain.style.display || "(still showing)"}`);
+check("the deck's own navigation bar is not mistaken for a curtain",
+  doc7.querySelector(".navbar").style.display !== "none",
+  "a 58px strip is furniture, not an overlay");
+
+// A dialog the student opens mid-stage is theirs, and nothing sweeps it away.
+const dialog = doc7.createElement("div");
+dialog.id = "student-dialog";
+dialog.style.cssText = "position:fixed;top:0;left:0;right:0;bottom:0";
+doc7.body.appendChild(dialog);
+check("a dialog opened during a stage is left alone",
+  dialog.style.display !== "none",
+  "only the moment a stage starts sweeps, never continuously");
+
+lock7?.destroy();
+
 const passed2 = results.filter(Boolean).length;
 console.log(`\nTOTAL ${passed2} passed, ${results.length - passed2} failed`);
 process.exit(results.every(Boolean) ? 0 : 1);

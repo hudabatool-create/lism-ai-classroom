@@ -9,13 +9,13 @@ Build a single self-contained interactive HTML slide deck for [TOPIC NAME] — [
 One HTML file, no required external dependencies, no localStorage, runs by opening the file in any browser. It must work as a presentable deck: one slide visible at a time, full-screen friendly, Next and Previous buttons, left/right arrow key support, a slide counter (e.g. “3 / 10”) and a progress dots indicator at the bottom. Students type and submit answers directly into the slides. Arrow keys must NOT change slide while a student is typing in an input. Total lesson 50 minutes, including 10 minutes reserved across the Starter, Main Activity and Exit Ticket for teacher feedback and for students to explain or defend their work.
 
 ================================================================================
-THE FOURTEEN RULES — READ THESE FIRST, CHECK THEM LAST
+THE SIXTEEN RULES — READ THESE FIRST, CHECK THEM LAST
 ================================================================================
 Everything after this section describes the teaching. This section is what
 makes the file work in a real classroom, with a teacher pacing thirty children
 through it on their own devices.
 
-These fourteen are the ones that get skipped. Each one has already cost a real
+These sixteen are the ones that get skipped. Each one has already cost a real
 lesson: a class that could not submit an answer, a teacher whose screen stayed
 empty for fifty minutes, a child shown 10 out of 10 for nonsense. A file that
 breaks any of them is not finished, however good the rest of it looks.
@@ -99,6 +99,22 @@ breaks any of them is not finished, however good the rest of it looks.
     false, exactly as shown in THE MANIFEST MUST DECLARE ITS MARKS below.
     Without it LISM cannot tell what the activity marked from what the teacher
     still owes, and every mark lands as awaiting review.
+
+15. NEVER DRAW YOUR OWN "WAITING FOR YOUR TEACHER" SCREEN. LISM already shows
+    one, around the activity, between stages. A deck that drew its own curtain
+    on stage_ended and forgot to remove it on start_stage made every stage
+    after the first invisible: the right slide was active underneath the whole
+    time, and the only way through was to reload -- which threw away every mark
+    the student had earned. If you handle stage_ended at all, handle
+    start_stage as the exact undo of it.
+
+16. DO NOT INVENT A TEACHER APPROVAL, A SAVE, OR ANY OTHER STEP LISM DOES NOT
+    HAVE. One deck printed "Teacher: approve certificate before printing", so
+    a child finished the challenge task and waited for an approval that could
+    never arrive, because nothing was ever sent and there is nothing on the
+    teacher's screen to approve it with. The certificate is the student's, the
+    moment the challenge is done. Promise only what this file can do by itself
+    and what the integration section below actually supports.
 
 If you cannot satisfy a rule, say so in one line at the end and explain why.
 An honest gap a teacher can see is safe. A silent one is what reaches children.
@@ -441,7 +457,7 @@ have written the file out in several parts, this is where the parts join and
 that is exactly where the extra bracket goes.
 
 11. SELF-CHECK BEFORE YOU FINISH
-Answer the fourteen rules at the top of this prompt, by number, in one short line
+Answer the sixteen rules at the top of this prompt, by number, in one short line
 each, as numbers rather than assurances:
 
   1. Submit buttons written: ___  (one per answer box; state both counts)
@@ -458,6 +474,8 @@ each, as numbers rather than assurances:
  12. Slides written: ___
  13. data-stage ids written, in the fixed order: ___ of 11
  14. Rubric criteria in the manifest: ___, of which objective: ___ and teacher-marked: ___
+ 15. Waiting/curtain screens this file draws itself: must be 0
+ 16. Approvals or saves promised that LISM cannot deliver: must be 0
 
 If any answer is short of what the rule requires, say so in one line rather
 than rounding it up.

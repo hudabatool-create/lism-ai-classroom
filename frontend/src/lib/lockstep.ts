@@ -208,6 +208,47 @@ export function installLockstep(doc: Document): LockstepHandle | null {
   let applying = false;
   let observer: MutationObserver | null = null;
 
+  /**
+   * Take down anything covering the whole screen when a stage starts.
+   *
+   * Decks draw their own "Waiting for your teacher…" curtain when LISM ends a
+   * stage. A Grade 8 deck -- correct in every other respect, manifest, rubric,
+   * reporting and all -- removed its curtain on `resume` but not on
+   * `start_stage`, so every stage after the first left it hanging over the
+   * lesson. The right slide was active underneath the whole time; the class
+   * simply could not see it, and the only way through was to reload. Reloading
+   * threw away every mark they had earned, which is how a working rubric came
+   * to look broken.
+   *
+   * Swept only at the moment the teacher starts a stage, never continuously:
+   * a dialog the student opens during a stage is theirs and is left alone.
+   * LISM draws the between-stages screen itself, around the activity, so
+   * nothing here is lost by taking the activity's own version down.
+   */
+  function clearBlockingOverlays() {
+    const view = doc.defaultView;
+    if (!view) return;
+    const { innerWidth: vw, innerHeight: vh } = view;
+    if (!vw || !vh) return;
+    const current = sections[currentIndex];
+
+    for (const el of Array.from(doc.body.children)) {
+      if (!(el instanceof view.HTMLElement)) continue;
+      // Never touch the lesson itself, or anything holding it.
+      if (el === current || el.contains(current) || current?.contains(el)) continue;
+      if (sections.some((s) => el === s || el.contains(s))) continue;
+
+      const style = view.getComputedStyle(el);
+      if (style.position !== "fixed" && style.position !== "absolute") continue;
+      if (style.display === "none" || style.visibility === "hidden") continue;
+
+      const box = el.getBoundingClientRect();
+      if (box.width < vw * 0.9 || box.height < vh * 0.9) continue;  // not a curtain
+
+      el.style.setProperty("display", "none", "important");
+    }
+  }
+
   function apply() {
     if (applying) return;
     applying = true;
@@ -377,6 +418,7 @@ export function installLockstep(doc: Document): LockstepHandle | null {
       const matched = byId >= 0 ? byId : byHeading;
       currentIndex = matched >= 0 ? matched : Math.min(index, sections.length - 1);
       if (stageId === null) currentIndex = -1;
+      if (currentIndex >= 0) clearBlockingOverlays();
       // The teacher starting a stage is the only thing that opens up more of
       // the deck, and it always wins over wherever the student had wandered.
       teacherIndex = currentIndex;
