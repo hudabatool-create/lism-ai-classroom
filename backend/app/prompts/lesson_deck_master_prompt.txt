@@ -332,7 +332,7 @@ Completing an extension earns recognition, not points. Build an Extension Achiev
 When it becomes available
 The “Create my certificate” button appears only once the single Challenge / Extension Task has been submitted and accepted — which is only possible after all four graded questions of the chosen pathway are complete; until then it is greyed out with the reason shown.
 The student’s name is required — prompt for it if empty, and never produce a certificate with a blank name.
-Include a teacher approval toggle (“Teacher: approve certificate”) and a one-line teacher comment field, so the certificate is issued by the teacher rather than self-awarded.
+No approval step, and no waiting. The certificate is the student’s the moment the challenge task is accepted — it recognises work the file has already seen. Do not build an “approve” toggle, a “send to teacher” button or a pending state: nothing is transmitted anywhere, no teacher screen can grant it, and a child who finished the task would sit waiting for something that can never arrive. Leave a printed signature line if you like — that is for the paper copy, not a gate.
 The certificate is issued only for a genuinely completed challenge task, and never for the four graded questions alone.
 What goes on it
 Heading — “Certificate of Achievement · Extension Challenge” — with an editable school or class name field.
@@ -345,9 +345,38 @@ Teacher signature line and date, with room to sign the printed copy.
 No marks anywhere on the certificate — this replaces bonus scoring entirely.
 How the PDF is produced (offline-safe, no dependencies)
 Render the certificate as an on-screen A4 landscape panel with a decorative border, the lesson’s colour scheme and large readable type, so the student sees exactly what they will get.
-Primary export: a “Save as PDF” button calling window.print() with a print stylesheet scoped to the certificate alone — @page { size: A4 landscape; margin: 0 }, everything else display:none, no internal page breaks, print-color-adjust:exact. The browser’s own “Save as PDF” destination creates the file, so it works offline with nothing installed.
+TWO ways to save it, because one is not enough. A certificate a child earned and
+cannot keep is worse than no certificate.
+
+Primary — “Save my certificate”, a direct download that needs no dialogue, no
+print driver and no internet. Copy this as written:
+
+  function saveCertificate(){
+    var panel = document.getElementById('certificate');       // the A4 panel
+    var css   = document.querySelector('style').textContent;  // the lesson's own CSS
+    var page  = '<!DOCTYPE html><html lang="' + (PROFILE.lang || 'en') +
+                '" dir="' + (PROFILE.dir || 'ltr') + '"><head><meta charset="utf-8">' +
+                '<title>Certificate</title><style>' + css +
+                '@page{size:A4 landscape;margin:0}</style></head><body>' +
+                panel.outerHTML + '</body></html>';
+    var url = URL.createObjectURL(new Blob([page], {type:'text/html'}));
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'Certificate - ' + studentName + '.html';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+  }
+
+That file lands in the student’s Downloads folder, opens in any browser on any
+device, keeps its layout and colours, and prints to PDF from there whenever they
+want. It works with the network down.
+
+Secondary — “Save as PDF”, calling window.print() with a print stylesheet scoped
+to the certificate alone: @page { size: A4 landscape; margin: 0 }, everything
+else display:none, no internal page breaks, print-color-adjust:exact. Offer it
+beside the download, never instead of it.
 Secondary export: “Download as image”, drawing the certificate to a canvas and saving a PNG for browsers with a restricted print dialogue.
-Optional progressive enhancement: if a PDF library is reachable from a CDN, offer a one-click PDF download — but the print route must remain fully functional offline and the file must never depend on the library loading.
+No PDF library, from a CDN or anywhere else. The two routes above need nothing installed and nothing downloaded, and a lesson that reaches for a library is a lesson that fails in a room with poor wifi.
 The certificate follows PROFILE.lang and PROFILE.dir, so an Arabic lesson produces a fully right-to-left certificate with the commendation written in Arabic.
 Everything is generated on the student’s own device; nothing is uploaded.
 
