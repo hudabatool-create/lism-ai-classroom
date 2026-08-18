@@ -205,6 +205,33 @@ const refl = collectAnswers(doc7.querySelector('[data-stage="reflection"]'), doc
 check("the reflection text is captured", refl.filled === 1 && refl.text.includes("تعلمت"), refl.text.slice(0, 50));
 stopSave();
 
+// A multiple-choice answer is not its own question.
+//
+// A hinge question's options are radios wrapped in their labels, so the label
+// lookup and the value lookup returned the same text and every answer in the
+// teacher's feed read "C) <p style="red"> -> C) <p style="red">". Thirty of
+// those is a feed nobody can scan during a two-minute progress check.
+const MCQ = `<!DOCTYPE html><html><body>
+  <section data-stage="progress-check">
+    <p><strong>Which line correctly creates a red heading?</strong></p>
+    <label><input type="radio" name="hinge" value="A"> A) &lt;heading color="red"&gt;</label>
+    <label><input type="radio" name="hinge" value="B" checked> B) &lt;h1 style="color:red;"&gt;</label>
+  </section>
+</body></html>`;
+
+const dom8 = new JSDOM(MCQ, { pretendToBeVisual: true });
+const doc8 = dom8.window.document;
+global.CSS = dom8.window.CSS;
+Object.defineProperty(dom8.window.HTMLElement.prototype, "offsetParent", {
+  get() { return this.ownerDocument.body; },
+});
+
+const mcq = collectAnswers(doc8.querySelector('[data-stage="progress-check"]'), doc8);
+check("the chosen option is captured", mcq.text.includes("B)"), mcq.text);
+check("it is not printed twice with an arrow between",
+  !mcq.text.includes("→"), mcq.text);
+check("only the one chosen option is reported", mcq.filled === 1, `filled: ${mcq.filled}`);
+
 const passed = results.filter(Boolean).length;
 console.log(`\nTOTAL ${passed} passed, ${results.length - passed} failed`);
 process.exit(results.every(Boolean) ? 0 : 1);

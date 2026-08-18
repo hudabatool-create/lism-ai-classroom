@@ -145,7 +145,12 @@ export function collectAnswers(section: HTMLElement, doc: Document): HarvestedAn
 
     filled += 1;
     const question = label.replace(/\s+/g, " ").slice(0, 120);
-    parts.push(question ? `${question} → ${value}` : value);
+    // A radio wrapped in its own label gives the same text twice, so a
+    // multiple-choice answer read "C) <p style="red"> → C) <p style="red">"
+    // all down the teacher's feed. The option is the answer; there is no
+    // question to pair it with here.
+    const same = question && value.startsWith(question.slice(0, 40));
+    parts.push(question && !same ? `${question} → ${value}` : value);
   });
 
   return { text: parts.join("\n\n").slice(0, 4000), filled };
