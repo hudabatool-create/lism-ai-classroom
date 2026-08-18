@@ -9,13 +9,13 @@ Build a single self-contained interactive HTML slide deck for [TOPIC NAME] — [
 One HTML file, no required external dependencies, no localStorage, runs by opening the file in any browser. It must work as a presentable deck: one slide visible at a time, full-screen friendly, Next and Previous buttons, left/right arrow key support, a slide counter (e.g. “3 / 10”) and a progress dots indicator at the bottom. Students type and submit answers directly into the slides. Arrow keys must NOT change slide while a student is typing in an input. Total lesson 50 minutes, including 10 minutes reserved across the Starter, Main Activity and Exit Ticket for teacher feedback and for students to explain or defend their work.
 
 ================================================================================
-THE TWELVE RULES — READ THESE FIRST, CHECK THEM LAST
+THE FOURTEEN RULES — READ THESE FIRST, CHECK THEM LAST
 ================================================================================
 Everything after this section describes the teaching. This section is what
 makes the file work in a real classroom, with a teacher pacing thirty children
 through it on their own devices.
 
-These twelve are the ones that get skipped. Each one has already cost a real
+These fourteen are the ones that get skipped. Each one has already cost a real
 lesson: a class that could not submit an answer, a teacher whose screen stayed
 empty for fifty minutes, a child shown 10 out of 10 for nonsense. A file that
 breaks any of them is not finished, however good the rest of it looks.
@@ -90,8 +90,103 @@ breaks any of them is not finished, however good the rest of it looks.
     reportToLISM call sites, how many DOK questions per pathway, how many
     slides. Counting is the check; a claim that it is "all done" is not.
 
+13. THE STAGE LIST IS FIXED. Exactly the 11 slides listed in THE STAGE
+    LIST IS FIXED below, in that order, each carrying its given data-stage
+    attribute. Nothing added, removed, reordered, merged or split.
+
+14. THE MANIFEST DECLARES THE MARKS. The Main Activity stage carries "marks" and a
+    "rubric" array with one criterion per DOK, each flagged objective true or
+    false, exactly as shown in THE MANIFEST MUST DECLARE ITS MARKS below.
+    Without it LISM cannot tell what the activity marked from what the teacher
+    still owes, and every mark lands as awaiting review.
+
 If you cannot satisfy a rule, say so in one line at the end and explain why.
 An honest gap a teacher can see is safe. A silent one is what reaches children.
+
+================================================================================
+THE STAGE LIST IS FIXED — 11 slides, THIS ORDER, THESE IDS
+================================================================================
+Every slide carries the data-stage attribute given below, exactly as written:
+
+    <section class="slide" data-stage="starter"> ... </section>
+
+That attribute is how LISM knows which slide is which. With it, the teacher's
+stage list reads correctly and each slide gets its own pacing. Without it LISM
+falls back to guessing from your headings, and guessing has already produced a
+lesson that spent five minutes on its title screen and called its pathway
+chooser the Main Activity.
+
+Do not add a slide. Do not remove one. Do not reorder them. Do not merge two
+into one or split one into two. If the topic seems to need something else, put
+it inside the slide where it belongs.
+
+  #   data-stage        what that slide is
+  1   title           Title
+  2   keywords        Keywords & Objective
+  3   starter         Starter
+  4   objectives      Learning Objectives (ALL / MOST / SOME)
+  5   main-teaching   Main Teaching (I DO)
+  6   progress-check  Progress Check (hinge question, no marks)
+  7   main-activity   Main Activity (DOK 1-4 + Challenge, 10 marks)
+  8   rubric          Mark Scheme & Feedback (the rubric table)
+  9   connection      Connection Link (UAE / AI / Cross-Curricular)
+  10  exit-ticket     Exit Ticket
+  11  reflection      Reflection
+
+The manifest's `stages` array repeats this list in this order, with `id` and
+`anchor` both set to the data-stage value above. Recommended durations are the
+ones already given for each slide in this prompt -- do not invent new ones.
+
+================================================================================
+THE MANIFEST MUST DECLARE ITS MARKS, OR NOBODY CAN MARK THE WORK
+================================================================================
+LISM reports three numbers per student, not one: what the activity marked
+itself, what is still awaiting the teacher, and what the work was out of. That
+is what lets a teacher open the report, see thirty auto-marked DOK 1 answers
+already done, and spend their time only on the written reasoning that actually
+needs a human. It cannot do any of that unless the manifest says so.
+
+So the Main Activity stage in the manifest carries its marks and its rubric, with
+one criterion per DOK, and each criterion says whether a machine can judge it:
+
+  {
+    "id": "main-activity", "anchor": "main-activity",
+    "label": "Main Activity", "type": "main-activity",
+    "durationSeconds": 600, "sequentialLock": true,
+    "marks": 10,
+    "rubric": [
+      { "label": "DOK 1 Recall",     "marks": 2, "objective": true,
+        "descriptor": "Correct and uses the key term" },
+      { "label": "DOK 2 Skill",      "marks": 3, "objective": true,
+        "descriptor": "Correct method, correct value, units where they apply" },
+      { "label": "DOK 3 Application","marks": 3, "objective": false,
+        "descriptor": "Applies the idea to the new context with clear reasoning" },
+      { "label": "DOK 4 Evaluation", "marks": 2, "objective": false,
+        "descriptor": "Judgement is justified, not merely stated" }
+    ]
+  }
+
+`objective: true` means the answer has one right form a machine can check -- a
+number, a balanced equation, required code structures, an exact term. Those
+marks the activity awards itself.
+
+`objective: false` means the answer needs a person: extended reasoning, a
+judgement, a diagram, a photograph of working. Those marks belong to the
+teacher, and LISM shows them as awaiting review rather than inventing a score.
+
+Choose honestly. Marking a prose evaluation `objective: true` is how a child
+ends up with full marks for nonsense, which is the thing LENGTH IS NOT A MARK
+above exists to prevent. When you are unsure, `false` is the safe answer: a
+mark the teacher confirms costs them a minute, and a wrong mark costs a child
+their trust in the whole lesson.
+
+Every other stage sets "marks": null. The Starter, Guided Practice, the
+Progress Check, the Connection Link, the Exit Ticket, the Reflection and the
+Challenge Task carry no marks towards the total.
+
+The rubric TABLE on the Mark Scheme slide shows exactly these criteria, in
+this order, with these maximums -- the table a student reads and the rubric
+LISM marks against are the same rubric.
 
 0. PACING — NO TIMERS (mandatory)
 The teacher controls pacing, not the file. Do not build any timing mechanism:
@@ -346,7 +441,7 @@ have written the file out in several parts, this is where the parts join and
 that is exactly where the extra bracket goes.
 
 11. SELF-CHECK BEFORE YOU FINISH
-Answer the twelve rules at the top of this prompt, by number, in one short line
+Answer the fourteen rules at the top of this prompt, by number, in one short line
 each, as numbers rather than assurances:
 
   1. Submit buttons written: ___  (one per answer box; state both counts)
@@ -361,6 +456,8 @@ each, as numbers rather than assurances:
  10. Timers, countdowns or time-based logic: must be 0
  11. Brackets and tags counted and balanced: yes / no
  12. Slides written: ___
+ 13. data-stage ids written, in the fixed order: ___ of 11
+ 14. Rubric criteria in the manifest: ___, of which objective: ___ and teacher-marked: ___
 
 If any answer is short of what the rule requires, say so in one line rather
 than rounding it up.
