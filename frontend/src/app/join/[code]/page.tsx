@@ -57,6 +57,25 @@ function ReportTile({ label, value }: { label: string; value: string }) {
   );
 }
 
+/** The first of these that is really a non-empty string. */
+function firstString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return undefined;
+}
+
+/** The first of these that is really a finite number, including a numeric string. */
+function firstNumber(...values: unknown[]): number | null {
+  for (const value of values) {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "string" && value.trim() && Number.isFinite(Number(value))) {
+      return Number(value);
+    }
+  }
+  return null;
+}
+
 function formatDuration(seconds: number) {
   const m = Math.floor(seconds / 60);
   if (m < 1) return "under a minute";
@@ -376,10 +395,19 @@ export default function JoinPage() {
       let mark: number | null = null;
 
       if (data.type === "lism:event" && data.event === "student_submitted") {
-        stageId = data.stageId;
-        correct = data.correct ?? null;
-        answer = data.answer ?? "";
-        mark = data.mark ?? null;
+        // `stageId` is the contract, but be generous about the near-misses.
+        // Three decks generated from the same prompt by the same model each
+        // named this field differently, and the cost of not recognising one is
+        // an answer filed against whatever stage happens to be running.
+        //
+        // Type-checked rather than merely defaulted: `stage` is also the name
+        // LISM uses in its own outbound command, where it can be an object, and
+        // a deck that echoes the command back would otherwise file an answer
+        // against "[object Object]".
+        stageId = firstString(data.stageId, data.stage_id, data.stage);
+        correct = typeof data.correct === "boolean" ? data.correct : null;
+        answer = firstString(data.answer, data.response, data.text) ?? "";
+        mark = firstNumber(data.mark, data.marks, data.score);
       } else if (data.type === "lism-activity-response") {
         correct = data.correct ?? null;
         answer = data.answer ?? "";

@@ -8,6 +8,91 @@ Fill in: [TOPIC NAME] · [SUBJECT] · [GRADE] · [WEEK X] · [PREVIOUS LESSON TO
 Build a single self-contained interactive HTML slide deck for [TOPIC NAME] — [SUBJECT], Grade [GRADE], Week [WEEK X]. Previous lesson: [PREVIOUS LESSON TOPIC]. Guess the 5–6 lesson keywords yourself from the topic.
 One HTML file, no required external dependencies, no localStorage, runs by opening the file in any browser. It must work as a presentable deck: one slide visible at a time, full-screen friendly, Next and Previous buttons, left/right arrow key support, a slide counter (e.g. “3 / 10”) and a progress dots indicator at the bottom. Students type and submit answers directly into the slides. Arrow keys must NOT change slide while a student is typing in an input. Total lesson 50 minutes, including 10 minutes reserved across the Starter, Main Activity and Exit Ticket for teacher feedback and for students to explain or defend their work.
 
+================================================================================
+THE TWELVE RULES — READ THESE FIRST, CHECK THEM LAST
+================================================================================
+Everything after this section describes the teaching. This section is what
+makes the file work in a real classroom, with a teacher pacing thirty children
+through it on their own devices.
+
+These twelve are the ones that get skipped. Each one has already cost a real
+lesson: a class that could not submit an answer, a teacher whose screen stayed
+empty for fifty minutes, a child shown 10 out of 10 for nonsense. A file that
+breaks any of them is not finished, however good the rest of it looks.
+
+ 1. EVERY answer box has its own visible Submit button, directly beneath it,
+    labelled Submit. Validating as the student types is not submitting. A box
+    with no Submit button cannot be answered, cannot be marked, and cannot be
+    seen by the teacher.
+
+ 2. ONE attempt per question. After a student submits, disable that question's
+    Submit button and its input, and show what they answered. A hinge question
+    answered three times tells the teacher nothing about what the class knew
+    the first time.
+
+ 3. EVERY submitted answer is reported, using exactly this call, once per
+    submission. Copy it as written; do not rename it or wrap it in anything:
+
+      function reportToLISM(stageId, questionId, correct, answer, mark, maxMark, dok) {
+        if (window.parent === window) return;      // opened standalone: no-op
+        window.parent.postMessage({
+          type: 'lism:event', event: 'student_submitted',
+          stageId: stageId, questionId: questionId, correct: correct,
+          answer: answer, mark: mark, maxMark: maxMark, dok: dok
+        }, '*');
+      }
+
+    The key names are exact. `stageId` must match the data-stage of the
+    slide/section the question lives on. `answer` must be the student's own
+    text -- the teacher's live screen shows it, and sending only `correct`
+    leaves them nothing to discuss with the class.
+
+    Call it from every Submit handler you write -- starter, every DOK, the
+    progress check, the exit ticket, the reflection, the challenge task. Where
+    no mark applies, pass null for mark and maxMark. At the end, state how many
+    call sites you wrote.
+
+ 4. NO mark is ever awarded for length. Not word count, not character count,
+    not "the box is not empty". Those decide whether an answer is ready to be
+    marked, never what it is worth. See LENGTH IS NOT A MARK below.
+
+ 5. NO mark is a fixed value in the source. Every number a student sees is
+    computed at that moment from what that student wrote. If a mark can be read
+    in the HTML, it is wrong.
+
+ 6. The rubric is a TABLE, not a total. One row per DOK, with four columns:
+    criterion, the descriptor matched, marks earned, marks available -- plus a
+    total row. It is filled in as the student submits, not at the end. A single
+    "Total Score: 0 / 10" is not a rubric.
+
+ 7. ALL THREE pathways are generated in full, with genuinely different
+    questions. ALL, MOST and SOME must each have their own DOK 1-4. A chooser
+    that only changes a label is not differentiation. Test your own chooser by
+    reading it back: clicking each of the three must swap the questions.
+
+ 8. NOTHING is hidden underneath a fixed bar. If you fix a reference bar or a
+    navigation bar to the bottom of the window, give the slide bottom padding
+    at least as tall as those bars combined. Content a student cannot scroll to
+    does not exist.
+
+ 9. Model answers unlock on SUBMISSION, never on being right. A child who
+    answers wrongly is the child who most needs to see the model answer.
+
+10. NO timers, countdowns, or time-based logic anywhere. The teacher paces the
+    lesson. Show the recommended duration beside each slide title as text.
+
+11. EVERY bracket in the script and EVERY tag in the body is opened and closed
+    exactly once. Walk the whole file for delimiters alone before you output
+    it. One extra ] has thrown away an entire script; one extra </div> has
+    orphaned the last three slides of a lesson.
+
+12. STATE YOUR COUNTS at the end, as numbers: how many Submit buttons, how many
+    reportToLISM call sites, how many DOK questions per pathway, how many
+    slides. Counting is the check; a claim that it is "all done" is not.
+
+If you cannot satisfy a rule, say so in one line at the end and explain why.
+An honest gap a teacher can see is safe. A silent one is what reaches children.
+
 0. PACING — NO TIMERS (mandatory)
 The teacher controls pacing, not the file. Do not build any timing mechanism:
 No automatic timers in any section.
@@ -261,7 +346,26 @@ have written the file out in several parts, this is where the parts join and
 that is exactly where the extra bracket goes.
 
 11. SELF-CHECK BEFORE YOU FINISH
-State briefly that you have verified: no mark anywhere is awarded for answer length and no mark is a fixed value in the source — name the answer key each DOK question is marked against; the file parses — every bracket in the script and every tag in the body opened and closed exactly once (state that you counted them); every locked model answer opens on submission rather than on the answer being correct; every marked question calls window.parent.postMessage with type 'lism:event', event 'student_submitted', and includes answer, mark and maxMark (state the number of call sites you wrote); each timed section holds the minimum volume of work listed above; exactly 11 slides; nothing overlaps at 1366×768; no timers, countdowns or time-based logic anywhere in the file — only recommended durations beside section titles; arrow keys inert while typing; all three ALL/MOST/SOME pathways generated in full with a working chooser that preserves typed work when switching; every pathway including ALL graded out of the full 10 with no cap or scaling; one single pathway-appropriate Challenge / Extension Task that appears only after all four DOK questions are accepted (never one per DOK), carries no marks, and produces a content-specific achievement certificate that saves as an A4 landscape PDF offline; Main Activity model answers sealed until all four graded questions are accepted; the student’s marks against the rubric visible out of 10 at all times; every other model-answer toggle locked until submission; each DOK marked on submit with a live total out of 10 and teacher override; every answer box validated by its declared type with a specific rejection reason; code boxes take Tab as indentation without trapping focus and preserve whitespace; the formula preview renders what was typed; the sketch pad works with mouse, finger and stylus without scrolling the slide, and undo/clear behave; paste, file-choose, drag-drop and camera capture all attach an image with limits enforced; math/chem/code/draw/image/RTL features present and working offline as required by the subject profile.
+Answer the twelve rules at the top of this prompt, by number, in one short line
+each, as numbers rather than assurances:
+
+  1. Submit buttons written: ___  (one per answer box; state both counts)
+  2. Questions that lock after one submission: ___ of ___
+  3. reportToLISM call sites: ___
+  4. Marks awarded for length anywhere: must be 0
+  5. Marks hard-coded in the source: must be 0
+  6. Rubric rows written: ___ (one per DOK, plus a total row)
+  7. Pathways generated in full: ___ of 3, with ___ distinct DOK questions each
+  8. Bottom padding reserved for fixed bars: ___ px (bars total ___ px)
+  9. Model answers that unlock on submission rather than on being correct: ___
+ 10. Timers, countdowns or time-based logic: must be 0
+ 11. Brackets and tags counted and balanced: yes / no
+ 12. Slides written: ___
+
+If any answer is short of what the rule requires, say so in one line rather
+than rounding it up.
+
+Then state briefly that you have also verified: no mark anywhere is awarded for answer length and no mark is a fixed value in the source — name the answer key each DOK question is marked against; the file parses — every bracket in the script and every tag in the body opened and closed exactly once (state that you counted them); every locked model answer opens on submission rather than on the answer being correct; every marked question calls window.parent.postMessage with type 'lism:event', event 'student_submitted', and includes answer, mark and maxMark (state the number of call sites you wrote); each timed section holds the minimum volume of work listed above; exactly 11 slides; nothing overlaps at 1366×768; no timers, countdowns or time-based logic anywhere in the file — only recommended durations beside section titles; arrow keys inert while typing; all three ALL/MOST/SOME pathways generated in full with a working chooser that preserves typed work when switching; every pathway including ALL graded out of the full 10 with no cap or scaling; one single pathway-appropriate Challenge / Extension Task that appears only after all four DOK questions are accepted (never one per DOK), carries no marks, and produces a content-specific achievement certificate that saves as an A4 landscape PDF offline; Main Activity model answers sealed until all four graded questions are accepted; the student’s marks against the rubric visible out of 10 at all times; every other model-answer toggle locked until submission; each DOK marked on submit with a live total out of 10 and teacher override; every answer box validated by its declared type with a specific rejection reason; code boxes take Tab as indentation without trapping focus and preserve whitespace; the formula preview renders what was typed; the sketch pad works with mouse, finger and stylus without scrolling the slide, and undo/clear behave; paste, file-choose, drag-drop and camera capture all attach an image with limits enforced; math/chem/code/draw/image/RTL features present and working offline as required by the subject profile.
 
 
 ================================================================================
