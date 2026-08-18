@@ -243,7 +243,12 @@ _STAGE_PATTERNS: list[_StagePattern] = [
     # holds the class here while everyone picks a level, so it needs a stage
     # of its own and a minute, not the five-minute default.
     _p("pathway", "Choose Your Pathway", "pathway",
-       r"choose your (?:pathway|path|level)|pathway|pick your (?:path|level)",
+       # About *choosing* a pathway, not the word on its own: a real deck
+       # headed "Extension Pathway Challenge Task" is the challenge, and a
+       # biology lesson on metabolic pathways is not a chooser at all.
+       r"(?:choose|select|pick)\b[^.]{0,30}\bpathway|"
+       r"\bpathway (?:selector|selection|choice)\b|"
+       r"(?:choose|select|pick) your (?:path|level)\b",
        words=("اختر مسار", "مسار التعلم", "اختيار المسار")),
     _p("main-activity", "Main Activity", "main-activity", r"main activity|main task|\byou do\b|\bindependent\b",
        words=("النشاط الرئيسي", "المهمة الرئيسية", "المهمة الأساسية")),

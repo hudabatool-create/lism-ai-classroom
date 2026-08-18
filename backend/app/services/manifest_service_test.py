@@ -13,7 +13,8 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 
-from app.services.manifest_service import extract_manifest, infer_stages_from_html  # noqa: E402
+from app.services.manifest_service import (  # noqa: E402
+    _match_stage, extract_manifest, infer_stages_from_html)
 
 results: list[bool] = []
 
@@ -276,6 +277,31 @@ english = {s["id"]: s["durationSeconds"] // 60 for s in infer_stages_from_html(T
 check("an English title slide stating the lesson total is not a 50-minute stage",
       english.get("title") == 1, f"{english.get('title')} min")
 
+
+# ---------------------------------------------------------------------------
+# Choosing a pathway, in English.
+#
+# The pathway pattern was written with \b escaped wrongly, so the compiled
+# regex held two literal backspace characters and matched nothing an English
+# deck could ever say. It went unnoticed because the only test for it was
+# Arabic, which matched on the word list instead and passed regardless.
+#
+# It must also not fire on the word alone: one deck headed a slide "Extension
+# Pathway Challenge Task", and a biology lesson on metabolic pathways is not a
+# chooser.
+# ---------------------------------------------------------------------------
+for heading, want in [
+    ("Choose Your Main Activity Pathway", "pathway"),
+    ("Choose Your Pathway", "pathway"),
+    ("Pathway Selector", "pathway"),
+    ("Select your level", "pathway"),
+    ("Main Activity (10 min)", "main-activity"),
+    ("Extension Pathway Challenge Task", None),
+    ("Metabolic pathways of respiration", None),
+]:
+    got = _match_stage("slide", heading)
+    got_id = got.id if got else None
+    check(f'"{heading}" is recognised as {want}', got_id == want, f"got {got_id}")
 
 passed = sum(results)
 print(f"\nTOTAL {passed} passed, {len(results) - passed} failed")
