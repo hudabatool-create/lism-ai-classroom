@@ -474,6 +474,24 @@ export default function JoinPage() {
     const doc = iframeRef.current?.contentDocument;
     const section = lockstepRef.current?.currentSection();
     if (!stage || !doc || !section || !studentId) return;
+
+    /* An activity that reports its own answers is never harvested at all.
+     *
+     * Harvesting exists for activities that stay silent -- a worksheet that
+     * prints "Answer accepted!" and tells LISM nothing. It has no way to know
+     * whether a Submit was accepted or refused, because it only sees the
+     * click. A Grade 3 deck rejected two answers for being too short, said
+     * nothing to LISM as it should, and LISM filed both anyway: the teacher's
+     * screen showed a child's half-finished first draft as a submitted answer,
+     * then the real one landed on top of it.
+     *
+     * There is no signal that separates "the activity refused this" from "the
+     * activity never speaks" -- both are silence. So take the file at its
+     * word: if it contains the reporting call, it is answerable for its own
+     * submissions and LISM keeps out. Preview already warns the teacher when
+     * a file has no reporting call at all, which is the case this is for.
+     */
+    if (info?.activity.manifest.reportsMarks) return;
     // An activity that reports its own answers is left alone entirely.
     //
     // The guard has to be checked here, on the way out, and not only when the
@@ -516,7 +534,7 @@ export default function JoinPage() {
         // Let the next submission try again rather than losing the answer.
         lastSentRef.current.delete(stage.id);
       });
-  }, [studentId, code]);
+  }, [studentId, code, info?.activity.manifest.reportsMarks]);
 
   useEffect(() => {
     harvestRef.current = harvestAnswer;
