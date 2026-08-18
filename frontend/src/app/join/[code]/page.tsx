@@ -15,6 +15,12 @@ import type { LessonManifest, SessionType, Stage } from "@/lib/types";
 // lesson's identity into the next.
 const studentKey = (code: string) => `lism_student_${code.toUpperCase()}`;
 
+/** How long to let an activity report a submission itself before LISM reads it
+ *  out of the page. Long enough for its handler to run and its postMessage to
+ *  be delivered; short enough that a student who submits and immediately looks
+ *  at the teacher's screen sees their answer there. */
+const REPORT_GRACE_MS = 400;
+
 /** The teacher's countdown, mirrored on the student's screen.
  *
  * Derived entirely from server-supplied timing (when the stage started and
@@ -341,7 +347,15 @@ export default function JoinPage() {
         // their answer reaches the teacher even when the activity never says
         // a word to us. The activity's own validation still runs untouched.
         unwatchSubmitsRef.current?.();
-        unwatchSubmitsRef.current = watchSubmits(doc, () => harvestRef.current?.());
+        unwatchSubmitsRef.current = watchSubmits(doc, () => {
+          // Give the activity its moment first. Submits are watched in the
+          // capture phase, so this fires before the activity's own handler has
+          // run, let alone posted its report -- and harvesting a stage the
+          // activity was about to report itself overwrites a real mark with
+          // "awaiting your teacher". One frame is not enough: the report
+          // crosses a postMessage and then a fetch.
+          setTimeout(() => harvestRef.current?.(), REPORT_GRACE_MS);
+        });
       }
     } catch {
       /* not same-origin: fall back to the postMessage contract above */
@@ -461,6 +475,15 @@ export default function JoinPage() {
     const section = lockstepRef.current?.currentSection();
     if (!stage || !doc || !section || !studentId) return;
     // An activity that reports its own answers is left alone entirely.
+    //
+    // The guard has to be checked here, on the way out, and not only when the
+    // submit was noticed. Submits are watched in the capture phase -- so that
+    // an activity which stops the event on its own handler is still seen --
+    // which means this runs BEFORE the activity's handler has even posted its
+    // report. A compliant deck sent mark 1 of 2 and the harvested text landed
+    // on top of it, overwriting a real mark with "awaiting your teacher". The
+    // activity knows its own marks, DOK levels and question ids; LISM is
+    // guessing from the page. The activity wins whenever it speaks at all.
     if (activityReportedRef.current.has(stage.id)) return;
 
     const { text, filled } = collectAnswers(section, doc);
