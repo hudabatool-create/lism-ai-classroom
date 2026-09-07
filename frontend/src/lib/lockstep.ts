@@ -78,7 +78,19 @@ function findSlides(doc: Document): HTMLElement[] {
     // them. An element carrying data-stage is a slide whatever the browser
     // made of the surrounding markup, and AI-written HTML is not always
     // well-formed.
-    if (selector.startsWith("[data-")) return matches;
+    // ...but only the outermost ones. A deck that also marks the question
+    // blocks *inside* a slide -- <div data-stage="starter"> around each
+    // question, within <section data-stage="starter"> -- would otherwise have
+    // those blocks counted as slides in their own right. Showing the starter
+    // then hid its own question blocks, and with them every answer box on the
+    // slide: the class saw the model answers and had nowhere to type. Main
+    // Teaching was the tell, because it marked no inner blocks and so kept
+    // its inputs while every other stage lost them.
+    if (selector.startsWith("[data-")) {
+      return matches.filter(
+        (el) => !matches.some((other) => other !== el && other.contains(el))
+      );
+    }
 
     const byParent = new Map<Element, HTMLElement[]>();
     for (const el of matches) {

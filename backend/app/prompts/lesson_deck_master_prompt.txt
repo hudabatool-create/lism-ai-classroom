@@ -126,6 +126,13 @@ Every slide carries the data-stage attribute given below, exactly as written:
 
     <section class="slide" data-stage="starter"> ... </section>
 
+ELEVEN elements in the whole file carry data-stage, and no more. Never put it on
+anything inside a slide -- not on a question block, not on an answer box, not on
+a tab panel. A real Grade 8 lesson put data-stage on each question <div> inside
+its section; LISM read those as slides of their own and hid them while showing
+the very section they belonged to, so the class saw the model answers with
+nowhere to type. Give inner blocks a class or an id instead.
+
 That attribute is how LISM knows which slide is which. With it, the teacher's
 stage list reads correctly and each slide gets its own pacing. Without it LISM
 falls back to guessing from your headings, and guessing has already produced a

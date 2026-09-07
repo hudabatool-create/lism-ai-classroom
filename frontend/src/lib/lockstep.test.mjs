@@ -451,6 +451,60 @@ check("a dialog opened during a stage is left alone",
 
 lock7?.destroy();
 
+// ---------------------------------------------------------------------------
+// A deck that marks the question blocks inside a slide as well as the slide.
+//
+// From a real Grade 8 lesson: Claude wrote <div data-stage="starter"> around
+// each question, inside <section data-stage="starter">. Lockstep counted all
+// 42 marked elements as slides, so showing the Starter hid the Starter's own
+// question blocks -- the class saw the model answers with nowhere to type.
+// Main Teaching was the one stage that worked, because it marked no inner
+// blocks, which is exactly how the teacher described it.
+const HTML8 = `<!DOCTYPE html><html><body>
+  <section data-stage="starter"><h2>Starter</h2>
+    <div data-stage="starter"><textarea id="s1"></textarea></div>
+    <div data-stage="starter"><textarea id="s2"></textarea></div>
+  </section>
+  <section data-stage="main-teaching"><h2>Main Teaching</h2>
+    <textarea id="mt"></textarea>
+  </section>
+  <section data-stage="exit-ticket"><h2>Exit Ticket</h2>
+    <div data-stage="exit-ticket"><textarea id="e1"></textarea></div>
+  </section>
+</body></html>`;
+
+const dom8 = new JSDOM(HTML8, { pretendToBeVisual: true });
+const doc8 = dom8.window.document;
+global.MutationObserver = dom8.window.MutationObserver;
+const lock8 = installLockstep(doc8, { onStudentMoved: () => {} });
+
+const typable = (id) => {
+  const el = doc8.getElementById(id);
+  for (let n = el; n; n = n.parentElement) {
+    if (n.style && n.style.display === "none") return false;
+  }
+  return true;
+};
+
+lock8?.showStage("starter", 0, "Starter");
+check("the Starter's own question blocks survive being shown",
+  typable("s1") && typable("s2"),
+  "a slide must not hide the blocks inside it");
+check("a later stage's boxes stay hidden during the Starter",
+  !typable("e1"), "exit ticket should still be away");
+
+lock8?.showStage("exit-ticket", 2, "Exit Ticket");
+check("the Exit Ticket's box is reachable when its stage starts",
+  typable("e1"), "students had nowhere to type");
+check("the Starter's boxes are put away again",
+  !typable("s1"), "only one stage on screen at a time");
+
+lock8?.showStage("main-teaching", 1, "Main Teaching");
+check("Main Teaching still works (it marked no inner blocks)",
+  typable("mt"), "the stage that never broke must not start breaking");
+
+lock8?.destroy();
+
 const passed2 = results.filter(Boolean).length;
 console.log(`\nTOTAL ${passed2} passed, ${results.length - passed2} failed`);
 process.exit(results.every(Boolean) ? 0 : 1);
