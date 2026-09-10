@@ -91,6 +91,13 @@ def health():
         "email_configured": email_service.is_configured(),
         "email_host": settings.smtp_host or None,
         "email_from": settings.smtp_from_email if settings.smtp_host else None,
+        # Whether the AI Learning Coach sends student messages to OpenAI, or
+        # falls back to its fixed Socratic lines. This decides whether LISM
+        # contains a student-facing AI tool at all -- which ADEK's guidance
+        # requires a school to know and to have approved before students use
+        # it. A boolean only: the key itself is never exposed, exactly as with
+        # the SMTP password above.
+        "coach_ai_enabled": bool(settings.openai_api_key),
     }
 
 
