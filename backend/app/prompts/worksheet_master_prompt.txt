@@ -552,7 +552,7 @@ Then state briefly that you have also verified: no mark anywhere is awarded for 
 
 
 ================================================================================
-LISM AI CLASSROOM INTEGRATION (required — keep this section when you paste this
+LISM LESSON INTEGRATION (required — keep this section when you paste this
 prompt into any AI, including outside LISM. Without it the generated file has no
 manifest, and LISM cannot show the lesson's stages or let the teacher pace them:
 the whole lesson collapses into one unnamed section.)

@@ -32,8 +32,14 @@ _MIN_JWT_SECRET_LENGTH = 16
 # FRONTEND_ORIGIN still works and is still the right place for staging and
 # preview domains -- it now adds to this list instead of replacing it.
 PRODUCTION_ORIGINS = (
+    # canonical_origin is the FIRST entry -- it is the address in every join
+    # link and password-reset email. lismaiclass.com stays first until
+    # lismlesson.com is confirmed resolving with a valid certificate; moving
+    # the new domain up before then would send every link to a dead address.
     "https://lismaiclass.com",
     "https://www.lismaiclass.com",
+    "https://lismlesson.com",
+    "https://www.lismlesson.com",
 )
 
 # Off for local dev and tests, where allowing the live domains would be noise.
@@ -48,7 +54,7 @@ PRODUCTION_ORIGINS_ENABLED = bool(
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    app_name: str = "LISM AI Classroom API"
+    app_name: str = "LISM Lesson API"
 
     # Real persistence: defaults to a local SQLite file so the app works with
     # zero setup and survives restarts. Point this at a Postgres URL (e.g. a

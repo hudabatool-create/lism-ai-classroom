@@ -28,7 +28,7 @@ logger = logging.getLogger("lism.ai")
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 
 LISM_INTEGRATION_ADDENDUM = """
-LISM CLASSROOM INTEGRATION ADDENDUM (required, in addition to everything above):
+LISM LESSON INTEGRATION ADDENDUM (required, in addition to everything above):
 1. Emit a machine-readable manifest as an inert script tag in <head>:
    <script type="application/json" id="lism-manifest">{...}</script>
    It must include: lessonType ("lesson-deck" or "worksheet"), subject, grade,

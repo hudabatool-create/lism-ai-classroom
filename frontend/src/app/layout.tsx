@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "LISM AI Classroom",
+  title: "LISM Lesson",
   description: "Create. Engage. Monitor. Analyze. Inspire.",
 };
 

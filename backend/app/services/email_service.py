@@ -94,10 +94,10 @@ def is_configured() -> bool:
 def send_verification_email(to_email: str, name: str, verify_url: str) -> None:
     send_email(
         to_email,
-        subject="Verify your LISM AI Classroom email",
+        subject="Verify your LISM Lesson email",
         body=(
             f"Hi {name},\n\n"
-            "Please confirm your email address for LISM AI Classroom by opening this link:\n"
+            "Please confirm your email address for LISM Lesson by opening this link:\n"
             f"{verify_url}\n\n"
             "If you didn't create this account, you can ignore this email."
         ),
@@ -107,7 +107,7 @@ def send_verification_email(to_email: str, name: str, verify_url: str) -> None:
 def send_password_reset_email(to_email: str, name: str, reset_url: str) -> None:
     send_email(
         to_email,
-        subject="Reset your LISM AI Classroom password",
+        subject="Reset your LISM Lesson password",
         body=(
             f"Hi {name},\n\n"
             "Someone requested a password reset for this account. Open this link to choose a new password "

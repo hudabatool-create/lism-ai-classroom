@@ -38,7 +38,7 @@ export default function LoginPage() {
           <Logo size="sm" />
         </div>
         <h1 className="mb-1 text-2xl font-semibold text-slate-900 dark:text-white">Welcome back</h1>
-        <p className="mb-6 text-sm text-slate-500 dark:text-slate-400">Log in to your LISM AI Classroom account.</p>
+        <p className="mb-6 text-sm text-slate-500 dark:text-slate-400">Log in to your LISM Lesson account.</p>
         {error && (
           <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-950 dark:text-red-400">
             {error}

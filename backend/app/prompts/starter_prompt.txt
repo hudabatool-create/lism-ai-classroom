@@ -1,6 +1,6 @@
-Master Prompt — Starter / Retrieval Activity (LISM AI Classroom)
+Master Prompt — Starter / Retrieval Activity (LISM Lesson)
 Fill in the bracketed fields, then paste this whole prompt into ChatGPT, Claude, Gemini or any AI tool.
-Save the HTML it returns as a .html file and upload it to LISM AI Classroom.
+Save the HTML it returns as a .html file and upload it to LISM Lesson.
 
 Fill in: [TOPIC NAME] · [SUBJECT] · [GRADE] · [WEEK X]
 
@@ -69,7 +69,7 @@ Each section: one input, a Submit button, immediate specific feedback, and a run
 indicator. Keep the whole thing completable in about 5 minutes.
 
 
-LISM AI CLASSROOM INTEGRATION (required — do not remove this section)
+LISM LESSON INTEGRATION (required — do not remove this section)
 
 Without this the uploaded file has no manifest, so LISM cannot show the activity's sections or let the
 teacher pace them, and the whole activity collapses into one unnamed block.

@@ -115,7 +115,7 @@ def build_pdf(
     styles = getSampleStyleSheet()
 
     elements = [
-        Paragraph("LISM AI Classroom Report", styles["Title"]),
+        Paragraph("LISM Lesson Report", styles["Title"]),
         Paragraph(f"Activity: {activity['title']}", styles["Heading2"]),
         Paragraph(f"Session Code: {session['code']}", styles["Normal"]),
         Paragraph(f"Students joined: {len(students)} | Responses: {len(responses)}", styles["Normal"]),

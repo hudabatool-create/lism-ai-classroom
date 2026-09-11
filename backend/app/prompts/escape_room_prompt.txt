@@ -1,6 +1,6 @@
-Master Prompt — Escape Room (LISM AI Classroom)
+Master Prompt — Escape Room (LISM Lesson)
 Fill in the bracketed fields, then paste this whole prompt into ChatGPT, Claude, Gemini or any AI tool.
-Save the HTML it returns as a .html file and upload it to LISM AI Classroom.
+Save the HTML it returns as a .html file and upload it to LISM Lesson.
 
 Fill in: [TOPIC NAME] · [SUBJECT] · [GRADE] · [WEEK X]
 
@@ -74,7 +74,7 @@ narrows the thinking without giving the answer (log that a hint was used). A sol
 Section 5 — ESCAPED: which lock was hardest and what they had to understand to open it.
 
 
-LISM AI CLASSROOM INTEGRATION (required — do not remove this section)
+LISM LESSON INTEGRATION (required — do not remove this section)
 
 Without this the uploaded file has no manifest, so LISM cannot show the activity's sections or let the
 teacher pace them, and the whole activity collapses into one unnamed block.
