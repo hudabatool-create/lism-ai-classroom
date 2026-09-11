@@ -159,7 +159,12 @@ export default function ActivityPreviewPage() {
   const unmanaged = activity.manifest?.managed === false;
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] flex-col">
+    // min-h, not h: a fixed-height column made the iframe take whatever the
+    // header, banners and control card left over. A deck with a script error
+    // and no manifest shows two tall banners, and on a 1280x720 laptop that
+    // left the activity 205px -- a quarter of the screen. Now the page grows
+    // and scrolls instead, and the iframe below keeps its own floor.
+    <div className="flex min-h-[calc(100vh-4rem)] flex-col">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-amber-600">
@@ -264,7 +269,7 @@ export default function ActivityPreviewPage() {
         // lets the preview move the activity rather than only ask it to.
         src={`/activity/${activityId}/raw?preview=1`}
         title={`Preview of ${activity.title}`}
-        className="mt-4 min-h-0 flex-1 w-full rounded-2xl border border-slate-200 bg-white dark:border-slate-800"
+        className="mt-4 min-h-[70vh] flex-1 w-full rounded-2xl border border-slate-200 bg-white dark:border-slate-800"
       />
     </div>
   );
