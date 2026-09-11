@@ -33,13 +33,18 @@ _MIN_JWT_SECRET_LENGTH = 16
 # preview domains -- it now adds to this list instead of replacing it.
 PRODUCTION_ORIGINS = (
     # canonical_origin is the FIRST entry -- it is the address in every join
-    # link and password-reset email. lismaiclass.com stays first until
-    # lismlesson.com is confirmed resolving with a valid certificate; moving
-    # the new domain up before then would send every link to a dead address.
+    # link and password-reset email. www.lismlesson.com is first because it is
+    # the one Vercel serves; lismlesson.com 308-redirects to it, so pointing
+    # links at the bare domain would add a hop to every join. It was promoted
+    # only after it was confirmed serving over HTTPS with the backend accepting
+    # its credentialed requests.
+    #
+    # lismaiclass.com stays allowed: it is still live, and every link shared
+    # before the rename points at it.
+    "https://www.lismlesson.com",
+    "https://lismlesson.com",
     "https://lismaiclass.com",
     "https://www.lismaiclass.com",
-    "https://lismlesson.com",
-    "https://www.lismlesson.com",
 )
 
 # Off for local dev and tests, where allowing the live domains would be noise.
