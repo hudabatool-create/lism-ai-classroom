@@ -312,7 +312,7 @@ Keyboard-friendly: Tab moves through boxes in reading order, Ctrl/Cmd+Enter subm
 Print/PDF stylesheet (@media print) — A4 portrait, page-break-inside avoided within a section, sticky header printed once as a plain masthead, jump menu and buttons hidden, all collapsed content expanded except model answers, and typed answers printed as they are — code with its indentation intact in a bordered monospace block, canvas drawings printed as images, attachments printed at a sensible size, none of them cut across a page break. Include two buttons: Print my completed worksheet and Print blank copy (the second replaces every input with ruled writing lines, every code box with a bordered monospace grid and every drawing canvas with an empty framed box on the chosen background, so the teacher can hand out paper copies).
 
 6. PERSISTENT REFERENCE PANEL
-The keyword strip and the three differentiated objectives — Group C — Developing (green), Group B — Secure (yellow), Group A — High Attaining (blue) — must be visible or one tap away at all times: in the sticky header when collapsed, and repeated in full inside Section 2. Colour must never be the only signal — always pair the colour with the word Group C / Group B / Group A. In maths and science worksheets the strip may include a key formula chip; in language worksheets show term + translation.
+The keyword strip and the three differentiated objectives — Group C (green), Group B (yellow), Group A (blue), letter and colour only — must be visible or one tap away at all times: in the sticky header when collapsed, and repeated in full inside Section 2. Colour must never be the only signal — always pair the colour with the word Group C / Group B / Group A. In maths and science worksheets the strip may include a key formula chip; in language worksheets show term + translation.
 
 7. MODEL ANSWERS AND HINTS — LOCKED UNTIL THE STUDENT RESPONDS
 Every model answer sits inside a collapsible toggle that starts locked and unopenable. While locked it reads “🔒 Submit your answer first to unlock the model answer” and clicking does nothing — it must not open, even briefly.
@@ -326,6 +326,16 @@ The student always chooses their level. Generate the Main Task three times over 
 Group C — Developing (green) — more scaffolding: sentence starters, partially completed frames, given values or code skeletons, one step at a time.
 Group B — Secure (yellow) — standard grade-level demand with minimal scaffolding.
 Group A — High Attaining (blue) — greater demand: less given, multi-step reasoning, comparison, justification or an unfamiliar context.
+
+ON SCREEN AND IN PRINT, NAME THE PATHWAYS BY LETTER AND COLOUR ONLY.
+The student sees "Group C", "Group B", "Group A" and their colour. Nothing else.
+Never print Developing, Secure or High Attaining anywhere a student can read it —
+not on the chooser, the header strip, the rubric, the completion summary or the
+printed sheet. Those words tell YOU how hard to pitch each pathway. To a child
+choosing a level in front of their friends they are a ranking, and one who reads
+"Developing" at the top of their own worksheet has been told where the school
+places them. The letter and the colour carry the difference; the words stay in
+the lesson plan, where they belong to the teacher.
 Every pathway is graded out of the full 10 marks. This is non-negotiable:
 A student who chooses Group C is marked against the same rubric, with the same weightings (DOK 1 = 2, DOK 2 = 3, DOK 3 = 3, DOK 4 = 2), and can earn a genuine 10 / 10. There is no cap, no scaling down, no deduction and no asterisk for choosing Group C — the pathway changes the demand of the questions, never the marks available.
 The mark display must never imply otherwise: show “Main Task: 8 / 10 (Group C pathway)”, never “8 / 10 — reduced level” or a percentage of a smaller total.
