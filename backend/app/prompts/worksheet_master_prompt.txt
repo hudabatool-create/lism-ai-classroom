@@ -336,6 +336,18 @@ choosing a level in front of their friends they are a ranking, and one who reads
 "Developing" at the top of their own worksheet has been told where the school
 places them. The letter and the colour carry the difference; the words stay in
 the lesson plan, where they belong to the teacher.
+
+NEVER MOVE THE PAGE UNDER A STUDENT WHO IS TYPING.
+Told to show the stage you are already showing, do nothing: compare the target
+with the current stage and return early when they match. Re-running your
+stage-entry routine resets scroll, and a student typing a Main Task answer is
+thrown back to the top of the page mid-sentence.
+Never set scrollTop and never call scrollIntoView on a stage change you did not
+initiate. And never recalculate bar heights, padding or layout while an input or
+textarea has focus -- a phone's on-screen keyboard fires resize every time it
+opens, and remeasuring then shortens the page under the caret. If you must
+remeasure on resize, skip it whenever document.activeElement is an INPUT or
+TEXTAREA.
 Every pathway is graded out of the full 10 marks. This is non-negotiable:
 A student who chooses Group C is marked against the same rubric, with the same weightings (DOK 1 = 2, DOK 2 = 3, DOK 3 = 3, DOK 4 = 2), and can earn a genuine 10 / 10. There is no cap, no scaling down, no deduction and no asterisk for choosing Group C — the pathway changes the demand of the questions, never the marks available.
 The mark display must never imply otherwise: show “Main Task: 8 / 10 (Group C pathway)”, never “8 / 10 — reduced level” or a percentage of a smaller total.
