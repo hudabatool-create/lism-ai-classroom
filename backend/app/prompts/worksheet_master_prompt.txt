@@ -348,6 +348,37 @@ textarea has focus -- a phone's on-screen keyboard fires resize every time it
 opens, and remeasuring then shortens the page under the caret. If you must
 remeasure on resize, skip it whenever document.activeElement is an INPUT or
 TEXTAREA.
+
+MARKING WRITTEN REASONING — A PATTERN THAT DOES NOT MATCH IS NOT A WRONG ANSWER.
+DOK 1 and DOK 2 have answer keys. Mark them exactly, and say plainly whether the
+value is right: a student who wrote the correct value is told "Correct".
+
+DOK 3 and DOK 4 contain reasoning, and no keyword test can judge reasoning. So
+the estimate on those may only ever move UP. Two outcomes, and no third:
+  · Your detectors find the ideas -> show the mark and say "This looks right --
+    your teacher will confirm it."
+  · Your detectors do not find them -> show "Submitted. Your teacher will mark
+    this one." Show NO mark, NO zero, and do not use the words wrong,
+    incorrect, or missing.
+A student who wrote a correct answer in words your pattern did not expect must
+never be told they are wrong. This was measured on a real class: four correct
+answers in six lost marks, two of them scoring zero out of two, because one
+wrote "integer division" instead of "floor division" and another explained with
+"a remainder of 1" instead of writing 3.33. Both were right. Both were told they
+were not.
+
+So write each detector to accept how a [GRADE] student actually writes the idea:
+the technical term, the plain-English phrase, the operator symbol and the common
+synonym are all the same idea.
+
+NEVER print a detector's own description in the feedback. Those descriptions
+contain the answer, so a student who reasoned correctly is shown their own
+answer back as the thing they supposedly left out. Name the AREA still to
+address, never the value.
+
+In the rubric table and the completion summary, an unmarked DOK 3 or DOK 4 row
+reads "Awaiting your teacher", never 0. A zero is a judgement; blank is the
+truth until a teacher has read it.
 Every pathway is graded out of the full 10 marks. This is non-negotiable:
 A student who chooses Group C is marked against the same rubric, with the same weightings (DOK 1 = 2, DOK 2 = 3, DOK 3 = 3, DOK 4 = 2), and can earn a genuine 10 / 10. There is no cap, no scaling down, no deduction and no asterisk for choosing Group C — the pathway changes the demand of the questions, never the marks available.
 The mark display must never imply otherwise: show “Main Task: 8 / 10 (Group C pathway)”, never “8 / 10 — reduced level” or a percentage of a smaller total.
