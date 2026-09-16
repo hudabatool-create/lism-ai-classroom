@@ -256,7 +256,7 @@ chem — element symbols are case-sensitive (Co ≠ CO); accept subscripts writt
 code — check for required structures listed in data-must (e.g. class,def,__init__,self,return), correct nesting/indentation presence, and that a runnable-looking statement exists; ignore word count entirely and never gibberish-test code. Report which required element is missing.
 short — normalise case, trim, collapse spaces, strip diacritics/accents when data-lang is a Latin language (so élève = eleve), and match against data-answer synonyms. Accept one-word answers as valid.
 checklist — render the criteria as tick boxes plus one short justification box; accepted when the required number of boxes are ticked and the justification meets data-min words. Use this for PE, Art, Design, drama, music and any lesson whose real output is a performance or artefact rather than typed text.
-draw — accepted when the canvas contains real marks (compared against a blank canvas, with a minimum stroke or ink threshold so a stray dot is rejected), every required label in data-labels is ticked, and the caption meets data-min words. The diagram itself is not auto-marked — report “Diagram submitted — teacher marks the diagram” and leave those marks to the teacher override.
+draw — accepted when the canvas contains real marks (compared against a blank canvas, with a minimum stroke or ink threshold so a stray dot is rejected), every required label in data-labels is ticked, and the caption meets data-min words. The diagram itself is not auto-marked — report “Diagram submitted — teacher marks the diagram” and leave those marks to the teacher, who marks them in LISM.
 image — accepted when at least one image is attached and the caption meets data-min words. Never claim to judge image content; report “Image submitted — teacher marks the work.”
 mixed — every declared part must pass, and the feedback must say which part failed.
 
@@ -265,7 +265,7 @@ Code entry (code) — the box behaves like a small editor: monospace, white-spac
 Formula entry (numeric, symbolic, chem) — as in Section 4, plus a live preview line under the box rendering what was typed (3/4 → ¾, x^2 → x², H2O → H₂O), a keyboard-reachable symbol palette that does not steal focus, and fraction/index helper buttons that insert a template with the caret in the right place.
 Drawing (draw, when PROFILE.draw) — an inline  sketch pad with the background set by data-canvas (plain, squared grid, labelled axes, ruled or dotted), a fixed internal resolution scaled for high-DPI screens, and tools: pen in 3 thicknesses, 4–6 colours, eraser, straight-line tool, short text label tool, undo, redo and Clear with confirmation. Use pointer events so it works with mouse, finger and stylus on a tablet or smart board, with touch-action:none inside the canvas only so the page does not scroll while drawing. Beside the canvas show the required-labels tick list from data-labels and a caption box. Store the result as a PNG data URL so it appears in the completion summary.
 Images (image, or optional attachments on any box, when PROFILE.images) — three ways in, all client-side with nothing uploaded anywhere: paste from the clipboard (screenshot, graph, photo), choose file or drag and drop (image/* with a visible drop zone), and camera via capture="environment" so a student can photograph handwritten working on a tablet. Show a thumbnail with a Remove button, enforce the data-images limit (default 2), downscale anything wider than ~1600px and re-encode, and reject non-images or oversized files with a clear message. State on screen that images stay on the student’s own device.
-Because drawings and images cannot be auto-marked, any DOK question using them must have those marks awarded through the teacher override, with the auto-estimate covering only the labels, caption and written reasoning — and the on-screen wording must make that split obvious.
+Because drawings and images cannot be auto-marked, any DOK question using them must have those marks awarded by the teacher in LISM, with the auto-estimate covering only the labels, caption and written reasoning — and the on-screen wording must make that split obvious.
 
 3. LANGUAGE, SCRIPT AND RTL HANDLING
 Set  and dir from PROFILE. When dir:'rtl': mirror the whole layout — reference bar, navigation, progress dots, DOK badges, tables and the objective colour bars all flow right-to-left; Next moves left and Previous moves right visually, but the arrow keys keep their logical meaning (→ = next in LTR, ← = next in RTL). Keep code blocks, formulae and numbers dir:'ltr' inside RTL text so they don’t reverse.
@@ -299,7 +299,7 @@ Model answers live only inside collapsible toggles, and every toggle starts lock
 It cannot open until the student has submitted an accepted answer for that slide’s question(s). While locked it reads “🔒 Submit your answer first to unlock the model answer” and clicking does nothing — it must not open, even briefly.
 Starter and Exit Ticket toggles unlock when that slide’s boxes are accepted (all 5 blanks on the Exit Ticket). The Main Activity model answers unlock only when all four DOK questions of the student’s chosen pathway are accepted — see Section 7b.
 Once unlocked the summary reads “Reveal model answer” and opens normally; it stays closed by default.
-Include a small teacher override (“Teacher: unlock answers”) for whole-class feedback.
+Put no teacher controls in this file — see NO TEACHER CONTROLS IN A STUDENT'S FILE.
 Model answers must show full working for maths, balanced equations for chemistry, runnable code for programming, and correctly accented/diacriticised text for language subjects.
 
 7b. STUDENT PATHWAY CHOICE, EXTENSIONS AND MARK VISIBILITY
@@ -363,6 +363,20 @@ In the rubric table and the completion summary, an unmarked DOK 3 or DOK 4 row
 reads "Awaiting your teacher", never 0. A zero is a judgement; blank is the
 truth until a teacher has read it. The running total says what is auto-marked
 out of 5 and what is still with the teacher, so nobody reads 5 / 10 as a fail.
+
+NO TEACHER CONTROLS IN A STUDENT'S FILE.
+Every student opens this same file, so anything labelled for the teacher is in
+every student's hands. A real class found the per-criterion "teacher override"
+selectors on the rubric slide and set their own marks; a "Teacher: unlock
+answers" button opens every model answer for whoever presses it.
+So put none: no override selectors, no editable mark fields, no unlock-all
+button, no "teacher mode", and no hidden key or password -- a password inside a
+file every student has is not hidden. Every mark on the student's screen is
+read-only.
+The teacher marks, overrides and releases work in LISM itself, which holds the
+real record (Reports, then Mark). Nothing a student does in this file may change
+the mark sent to LISM, the rubric table, the running total, the completion
+summary or the certificate.
 Every pathway is graded out of the full 10 marks. This is non-negotiable:
 A student who chooses Group C is marked against the same rubric, with the same weightings (DOK 1 = 2, DOK 2 = 3, DOK 3 = 3, DOK 4 = 2), and can earn a genuine 10 / 10. There is no cap, no scaling down, no deduction and no asterisk for choosing Group C — the pathway changes the demand of the questions, never the marks available.
 The mark display must never imply otherwise: show “Main Activity: 8 / 10 (Group C pathway)”, never “8 / 10 — reduced level”.
@@ -387,7 +401,7 @@ Model answers stay locked until the whole Main Activity is finished. All four DO
 The student always sees their own marks against the rubric out of 10. After each accepted response show, next to that question, the rubric level (0–3), the exact descriptor matched (e.g. “Mostly correct”) and the marks earned out of that DOK’s maximum. In addition:
 A persistent “My mark: x / 10” chip sits in the reference bar, updating live and showing how many criteria are still unmarked.
 The rubric slide shows the full graded table — every criterion with its maximum, the level awarded, the descriptor matched, the marks earned, the running total out of 10 and the percentage — with the chosen pathway named above the table and the challenge task, if completed, noted beneath it as an achievement, not a mark.
-Marks are labelled “estimated — your teacher’s mark is final”, with the teacher override per criterion recalculating the total instantly.
+Marks are labelled “estimated — your teacher’s mark is final” and are read-only; the teacher’s final marks are entered in LISM.
 Feedback must always say how to gain the missing mark (“You explained the method; add the units to reach 3/3”), never only the score.
 
 7c. EXTENSION ACHIEVEMENT CERTIFICATE (PDF)
@@ -525,8 +539,8 @@ So:
   check, and show the rest as "awaiting your teacher's mark". Reporting less
   than full marks honestly is always correct; inventing full marks never is.
 - The running total is the sum of what was actually earned, labelled
-  "estimated — your teacher's mark is final", with the teacher override
-  recalculating it.
+  "estimated — your teacher's mark is final". Nothing on the student's
+  screen can change it.
 
 Marking against a key is not optional and not the hard part of this file. It
 is the part the lesson exists for.
@@ -572,7 +586,7 @@ each, as numbers rather than assurances:
 If any answer is short of what the rule requires, say so in one line rather
 than rounding it up.
 
-Then state briefly that you have also verified: no mark anywhere is awarded for answer length and no mark is a fixed value in the source — name the answer key each DOK question is marked against; the file parses — every bracket in the script and every tag in the body opened and closed exactly once (state that you counted them); every locked model answer opens on submission rather than on the answer being correct; every marked question calls window.parent.postMessage with type 'lism:event', event 'student_submitted', and includes answer, mark and maxMark (state the number of call sites you wrote); each timed section holds the minimum volume of work listed above; exactly 11 slides; nothing overlaps at 1366×768; no timers, countdowns or time-based logic anywhere in the file — only recommended durations beside section titles; arrow keys inert while typing; all three Group C/B/A pathways generated in full with a working chooser that preserves typed work when switching; every pathway including Group C graded out of the full 10 with no cap or scaling; one single pathway-appropriate Challenge / Extension Task that appears only after all four DOK questions are accepted (never one per DOK), carries no marks, and produces a content-specific achievement certificate that saves as an A4 landscape PDF offline; Main Activity model answers sealed until all four graded questions are accepted; the student’s marks against the rubric visible out of 10 at all times; every other model-answer toggle locked until submission; each DOK marked on submit with a live total out of 10 and teacher override; every answer box validated by its declared type with a specific rejection reason; code boxes take Tab as indentation without trapping focus and preserve whitespace; the formula preview renders what was typed; the sketch pad works with mouse, finger and stylus without scrolling the slide, and undo/clear behave; paste, file-choose, drag-drop and camera capture all attach an image with limits enforced; math/chem/code/draw/image/RTL features present and working offline as required by the subject profile.
+Then state briefly that you have also verified: no mark anywhere is awarded for answer length and no mark is a fixed value in the source — name the answer key each DOK question is marked against; the file parses — every bracket in the script and every tag in the body opened and closed exactly once (state that you counted them); every locked model answer opens on submission rather than on the answer being correct; every marked question calls window.parent.postMessage with type 'lism:event', event 'student_submitted', and includes answer, mark and maxMark (state the number of call sites you wrote); each timed section holds the minimum volume of work listed above; exactly 11 slides; nothing overlaps at 1366×768; no timers, countdowns or time-based logic anywhere in the file — only recommended durations beside section titles; arrow keys inert while typing; all three Group C/B/A pathways generated in full with a working chooser that preserves typed work when switching; every pathway including Group C graded out of the full 10 with no cap or scaling; one single pathway-appropriate Challenge / Extension Task that appears only after all four DOK questions are accepted (never one per DOK), carries no marks, and produces a content-specific achievement certificate that saves as an A4 landscape PDF offline; Main Activity model answers sealed until all four graded questions are accepted; the student’s marks against the rubric visible out of 10 at all times; every other model-answer toggle locked until submission; each DOK marked on submit with a live total out of 10 that the student cannot edit, and no teacher controls anywhere in the file; every answer box validated by its declared type with a specific rejection reason; code boxes take Tab as indentation without trapping focus and preserve whitespace; the formula preview renders what was typed; the sketch pad works with mouse, finger and stylus without scrolling the slide, and undo/clear behave; paste, file-choose, drag-drop and camera capture all attach an image with limits enforced; math/chem/code/draw/image/RTL features present and working offline as required by the subject profile.
 
 
 ================================================================================
