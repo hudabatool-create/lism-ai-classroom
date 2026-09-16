@@ -181,7 +181,16 @@ export default function LiveSessionPage() {
           return { ...prev, students: [...prev.students, msg.student] };
         }
         if (msg.type === "response_submitted") {
-          return { ...prev, responses: [...prev.responses, msg.response] };
+          // The server keeps ONE row per student per stage and folds each
+          // later answer into it, so a five-question starter arrives as five
+          // updates to the same row. Appending every update showed the student
+          // five times, each copy longer than the last. Replace in place, so
+          // the card grows and the list does not jump while being read.
+          const at = prev.responses.findIndex((r) => r.id === msg.response.id);
+          if (at === -1) return { ...prev, responses: [...prev.responses, msg.response] };
+          const responses = prev.responses.slice();
+          responses[at] = msg.response;
+          return { ...prev, responses };
         }
         if (msg.type === "stage_started") {
           return {
