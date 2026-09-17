@@ -321,7 +321,7 @@ export default function LiveSessionPage() {
    */
   async function handleUnlock(studentId: string, name: string) {
     if (!detail) return;
-    if (!window.confirm(`Unlock ${name}? Their exits stay on the focus report, and three more will lock them again.`)) {
+    if (!window.confirm(`Unlock ${name}? Their exits stay on the focus report, and ${detail.session.max_warnings} more will lock them again.`)) {
       return;
     }
     setUnlocking(studentId);
@@ -659,6 +659,33 @@ export default function LiveSessionPage() {
               checked={session.focus_monitoring}
               onChange={(value) => handleSetting({ focus_monitoring: value })}
             />
+            {/* The server has always accepted 1-10 here, but there was no way to
+                set it, so every session locked on the fourth exit. A teacher
+                running an exam wants the first one to count. */}
+            <div>
+              <label
+                htmlFor="max-warnings"
+                className="block text-sm font-medium text-slate-800 dark:text-slate-200"
+              >
+                Warnings before locking
+              </label>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                How many times a student may leave the activity before it locks. Choose 1 for an exam
+                where the first exit should lock them out.
+              </p>
+              <select
+                id="max-warnings"
+                value={session.max_warnings}
+                onChange={(e) => handleSetting({ max_warnings: Number(e.target.value) })}
+                className="mt-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-900"
+              >
+                {[1, 2, 3, 5, 10].map((n) => (
+                  <option key={n} value={n}>
+                    {n === 1 ? "1 — locks on the first exit" : `${n} warnings`}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div>
               <label
                 htmlFor="timer-sound"
