@@ -58,20 +58,27 @@ focus rings, and colour never used as the only signal. Nothing overlaps at any w
 
 4. STRUCTURE
 
-YOU CHOOSE THE MIX AND THE LENGTH. Build exactly these counts, up to 30 questions in total:
+YOU CHOOSE THE MIX AND THE LENGTH. Write a number in each bracket below -- any number you want.
+Leave a format blank or 0 and it will not appear. These are not suggestions or limits; build exactly
+the numbers written:
 
-  Multiple choice      [8]   4 options, one correct; every wrong option a named misconception
-  True / false         [4]   each with a one-line justification box
-  Fill in the blank    [4]   exact short answer; accept a pipe-separated list of spellings,
-                             ignoring case and surrounding spaces
-  Short answer         [0]   a phrase marked against an answer key of accepted wordings
-  Numeric              [0]   value, plus units where the subject uses them
-  Ordering / matching  [0]
-  Open-ended           [0]   a written answer the TEACHER marks -- see AUTO-MARKING below
+  Multiple choice      [  ]   4 options, one correct; every wrong option a named misconception
+  True / false         [  ]   each with a one-line justification box
+  Fill in the blank    [  ]   exact short answer; accept a pipe-separated list of spellings,
+                              ignoring case and surrounding spaces
+  Short answer         [  ]   a phrase marked against an answer key of accepted wordings
+  Numeric              [  ]   value, plus units where the subject uses them
+  Ordering / matching  [  ]
+  Open-ended           [  ]   a written answer the TEACHER marks -- see AUTO-MARKING below
 
 Use only the formats whose count is above zero, and leave out every format set to 0. Total questions
-= the sum of those counts. Total marks = the same number, one mark per question. Do not exceed 30
-questions. Order them so demand rises from recall to application to analysis.
+= the sum of those counts. Total marks = the same number, one mark per question. Order them so
+demand rises from recall to application to analysis.
+
+There is no fixed ceiling, and no format is capped: 30 multiple choice on their own is a valid quiz,
+so is 30 open-ended, so is any combination. Whatever the numbers, everything must still scale --
+question numbering, the layout at 1366x768 and on a 390px phone, the manifest, the running score and
+the results section. If a count is large, keep each question compact rather than dropping any.
 
 PACING -- pick one and build only that one:
   [ONE SECTION]   every question in a single section, students working down the page at their own
