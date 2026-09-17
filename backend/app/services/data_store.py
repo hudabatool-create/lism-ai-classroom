@@ -420,7 +420,12 @@ class DataStore:
                 # teacher can now change it either way, mid-lesson.
                 copy_paste_protection=(session_type == "assessment"),
                 focus_monitoring=(session_type == "assessment"),
-                max_warnings=3,
+                # An assessment locks on the FIRST exit: in an exam, leaving the
+                # page once is the thing being prevented, and three free goes is
+                # not a warning. A lesson keeps three, where a student glancing
+                # at another tab is not cheating. Either way the teacher can
+                # change it in Lesson settings, and unlock anyone in two taps.
+                max_warnings=(1 if session_type == "assessment" else 3),
                 timer_sound="chime",
             )
             db.add(row)

@@ -3,6 +3,8 @@ Fill in the bracketed fields, then paste this whole prompt into ChatGPT, Claude,
 Save the HTML it returns as a .html file and upload it to LISM Lesson.
 
 Fill in: [TOPIC NAME] · [SUBJECT] · [GRADE] · [WEEK X]
+Then set your question mix in section 4 — how many multiple choice, true/false,
+fill-in-the-blank and so on. The totals follow from your numbers.
 
 Build a single self-contained interactive HTML quiz for [TOPIC NAME] — [SUBJECT], Grade [GRADE], Week [WEEK X].
 One HTML file. Inline CSS and JS only, no external assets, no build step, no markdown fences in your reply.
@@ -56,16 +58,25 @@ focus rings, and colour never used as the only signal. Nothing overlaps at any w
 
 4. STRUCTURE
 
-Eight questions, one per section, then a results section.
+YOU CHOOSE THE MIX. Build exactly these counts, one question per section, then a results section:
 
-Mix the formats deliberately: multiple choice, true/false with justification, short answer, one
-numeric (if the subject suits it), and one ordering or matching item. Rise in demand from recall to
-application to analysis across the eight.
+  Multiple choice      [8]   4 options, one correct; every wrong option a named misconception
+  True / false         [4]   each with a one-line justification box
+  Fill in the blank    [4]   exact short answer; accept a pipe-separated list of spellings,
+                             ignoring case and surrounding spaces
+  Short answer         [0]   a phrase or sentence marked against an answer key
+  Numeric              [0]   value, plus units where the subject uses them
+  Ordering / matching  [0]
+
+Use only the formats whose count is above zero, and leave out every format set to 0. The total number
+of questions is the sum of those counts, and the total marks are the same number -- one mark per
+question. The manifest needs one stage per question, numbered q1 upward to that total.
+Order the questions so demand rises from recall to application to analysis.
 
 Each question: immediate specific feedback, the correct answer shown only after the attempt, and a
 running score. Wrong options must be plausible misconceptions, never filler.
 
-Results section: score out of 8, which questions were missed, and one sentence per missed question
+Results section: score out of the total number of questions, which questions were missed, and one sentence per missed question
 explaining the idea to revisit. Label it "estimated — your teacher's mark is final" if any question is
 open-ended.
 
