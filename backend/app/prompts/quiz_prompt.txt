@@ -58,27 +58,51 @@ focus rings, and colour never used as the only signal. Nothing overlaps at any w
 
 4. STRUCTURE
 
-YOU CHOOSE THE MIX. Build exactly these counts, one question per section, then a results section:
+YOU CHOOSE THE MIX AND THE LENGTH. Build exactly these counts, up to 30 questions in total:
 
   Multiple choice      [8]   4 options, one correct; every wrong option a named misconception
   True / false         [4]   each with a one-line justification box
   Fill in the blank    [4]   exact short answer; accept a pipe-separated list of spellings,
                              ignoring case and surrounding spaces
-  Short answer         [0]   a phrase or sentence marked against an answer key
+  Short answer         [0]   a phrase marked against an answer key of accepted wordings
   Numeric              [0]   value, plus units where the subject uses them
   Ordering / matching  [0]
+  Open-ended           [0]   a written answer the TEACHER marks -- see AUTO-MARKING below
 
-Use only the formats whose count is above zero, and leave out every format set to 0. The total number
-of questions is the sum of those counts, and the total marks are the same number -- one mark per
-question. The manifest needs one stage per question, numbered q1 upward to that total.
-Order the questions so demand rises from recall to application to analysis.
+Use only the formats whose count is above zero, and leave out every format set to 0. Total questions
+= the sum of those counts. Total marks = the same number, one mark per question. Do not exceed 30
+questions. Order them so demand rises from recall to application to analysis.
 
-Each question: immediate specific feedback, the correct answer shown only after the attempt, and a
-running score. Wrong options must be plausible misconceptions, never filler.
+PACING -- pick one and build only that one:
+  [ONE SECTION]   every question in a single section, students working down the page at their own
+                  pace. Use this for a test, and for anything over about 10 questions.
+  [PER QUESTION]  one section per question, released one at a time by the teacher. Good for a
+                  whole-class quiz show. Do not use it beyond 10 questions: the teacher has to press
+                  "Start next section" once for every question.
 
-Results section: score out of the total number of questions, which questions were missed, and one sentence per missed question
-explaining the idea to revisit. Label it "estimated — your teacher's mark is final" if any question is
-open-ended.
+AUTO-MARKING -- what the file may mark, and what it must not:
+  Multiple choice, true/false, fill in the blank, numeric, ordering/matching and short answer all
+  have answer keys. Mark those the moment the student submits: 1 for correct, 0 for incorrect, and
+  say plainly which it was. A true/false justification box is not marked; the mark is for the choice.
+  OPEN-ENDED QUESTIONS ARE NEVER AUTO-MARKED. No keyword test can judge written reasoning -- a
+  correct answer in words the pattern did not expect would score zero, which is worse than no score
+  at all. On submit show "Submitted. Your teacher will mark this one.": no mark, no zero, and never
+  the words wrong, incorrect or missing. Report it to LISM with mark null and maxMark 1, so it
+  reaches the teacher marked as waiting.
+  Never award a mark for length, for key terms alone, or for the box being non-empty.
+
+Each question: ONE attempt. On submit, disable that input and its button, then give specific feedback
+and reveal the correct answer for the auto-marked types. Wrong options are plausible misconceptions,
+never filler.
+
+RESULTS SECTION -- the student sees their own result at the end:
+  · the auto-marked score as "X / Y", where Y counts only the auto-marked questions
+  · every question listed right or wrong, with one sentence per wrong answer naming the idea to
+    revisit
+  · where the quiz has open-ended questions, a separate line "N marks are with your teacher",
+    never counted as 0 and never folded into the score
+  · no single percentage that treats unmarked work as lost marks
+  If every question is auto-marked, the score IS the final mark and may be shown as such.
 
 
 LISM LESSON INTEGRATION (required — do not remove this section)
@@ -87,6 +111,10 @@ Without this the uploaded file has no manifest, so LISM cannot show the activity
 teacher pace them, and the whole activity collapses into one unnamed block.
 
 A. Emit exactly one inert manifest in <head>:
+
+The stages follow the pacing you chose. For [ONE SECTION], the stages array holds exactly ONE
+stage: id "main-activity", label "Quiz", marks = total questions, autoMarks = the number of
+auto-marked questions. For [PER QUESTION], one stage per question, q1 upward, as shown below.
 
 <script type="application/json" id="lism-manifest">
 {
