@@ -139,7 +139,9 @@ interface JoinInfo {
     max_warnings: number;
     timer_sound: TimerSound;
   };
-  activity: { id: string; title: string; manifest: LessonManifest };
+  // `version` is absent from an older backend; the activity URL then simply
+  // goes unversioned and is revalidated on every load, as it always was.
+  activity: { id: string; title: string; manifest: LessonManifest; version?: string | null };
   current_stage: Stage | null;
 }
 
@@ -995,7 +997,15 @@ export default function JoinPage() {
         // Served through LISM's own origin so lockstep can reach the
         // document. Pointing straight at the backend would make this
         // cross-origin and leave us unable to enforce anything.
-        src={`/activity/${info.activity.id}/raw`}
+        // ...and with the version in the URL, so a device that sat through
+        // the last lesson on this deck loads it from its own disk rather than
+        // pulling it across the world again. A re-upload changes the version,
+        // which changes the URL, so nobody can be left on an old copy.
+        src={
+          info.activity.version
+            ? `/activity/${info.activity.id}/raw?v=${encodeURIComponent(info.activity.version)}`
+            : `/activity/${info.activity.id}/raw`
+        }
         className="flex-1 border-0"
       />
 

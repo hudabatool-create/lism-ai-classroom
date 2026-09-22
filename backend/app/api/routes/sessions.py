@@ -269,7 +269,17 @@ def get_session_by_code(code: str):
     current_stage = manifest["stages"][session["current_stage_index"]] if session["current_stage_index"] >= 0 else None
     return {
         "session": session,
-        "activity": {"id": activity["id"], "title": activity["title"], "manifest": manifest},
+        # `version` changes whenever the teacher re-uploads or edits, and the
+        # student page puts it in the activity's URL. That is what lets the
+        # deck be cached hard near the school instead of crossing the world
+        # on every device, every lesson, without anyone ever seeing an old
+        # copy: a new version is simply a new URL.
+        "activity": {
+            "id": activity["id"],
+            "title": activity["title"],
+            "manifest": manifest,
+            "version": activity.get("updated_at") or activity.get("created_at") or "",
+        },
         "current_stage": current_stage,
         # The countdown is derived from when the stage started, and every
         # device was measuring that against its own clock. A phone seven
