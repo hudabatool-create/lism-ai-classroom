@@ -34,7 +34,7 @@ export default function JoinWithCodePage() {
           value={code}
           onChange={(e) => setCode(e.target.value)}
           placeholder="e.g. 2U1OEI"
-          className="input mb-6 text-center font-mono text-2xl tracking-widest uppercase"
+          className="input mb-6 text-center font-mono text-2xl tracking-widest uppercase bg-white text-slate-900 dark:bg-white dark:text-slate-900"
         />
         <button
           type="submit"

@@ -64,8 +64,8 @@ the numbers written:
 
   Multiple choice      [  ]   4 options, one correct; every wrong option a named misconception
   True / false         [  ]   each with a one-line justification box
-  Fill in the blank    [  ]   exact short answer; accept a pipe-separated list of spellings,
-                              ignoring case and surrounding spaces
+  Fill in the blank    [  ]   short answer; accept a pipe-separated list of spellings, and
+                              mark it by the MARKING A TYPED ANSWER rules below
   Short answer         [  ]   a phrase marked against an answer key of accepted wordings
   Numeric              [  ]   value, plus units where the subject uses them
   Ordering / matching  [  ]
@@ -86,6 +86,21 @@ PACING -- pick one and build only that one:
   [PER QUESTION]  one section per question, released one at a time by the teacher. Good for a
                   whole-class quiz show. Do not use it beyond 10 questions: the teacher has to press
                   "Start next section" once for every question.
+
+MARKING A TYPED ANSWER -- a correct answer must never be told it is wrong:
+  Normalise both sides first: lowercase, trim, collapse repeated spaces, strip accents.
+  Then, before marking anything wrong, three more passes:
+    1. Compare again with spaces, hyphens and full stops removed from both sides, so
+       power point = PowerPoint = power-point, and web site = website. A student who spaces
+       a compound word differently has not made a mistake.
+    2. Do not demand a word the question has already printed. Where the sentence shows part
+       of the term -- "it is called the ____ Test" -- the key "Turing Test" must also accept
+       "Turing" on its own. Strip from the key the words printed immediately before and after
+       the blank, accept what remains, and accept the full phrase too.
+    3. Ignore a leading article (a, an, the) and any trailing punctuation.
+  Only when all three still fail is the answer wrong. When in doubt, award the mark and say
+  "accepted -- your teacher will review this one". A mark wrongly given can be taken back in
+  the live feed; a mark wrongly refused is argued about in front of the whole class.
 
 AUTO-MARKING -- what the file may mark, and what it must not:
   Multiple choice, true/false, fill in the blank, numeric, ordering/matching and short answer all

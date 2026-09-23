@@ -932,11 +932,11 @@ export default function JoinPage() {
             </p>
           )}
           <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Name</label>
-          <input required value={name} onChange={(e) => setName(e.target.value)} className="input mb-4" />
+          <input required value={name} onChange={(e) => setName(e.target.value)} className="input mb-4 bg-white text-slate-900 dark:bg-white dark:text-slate-900" />
           <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Grade</label>
-          <input value={grade} onChange={(e) => setGrade(e.target.value)} className="input mb-4" />
+          <input value={grade} onChange={(e) => setGrade(e.target.value)} className="input mb-4 bg-white text-slate-900 dark:bg-white dark:text-slate-900" />
           <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Section</label>
-          <input value={section} onChange={(e) => setSection(e.target.value)} className="input mb-6" />
+          <input value={section} onChange={(e) => setSection(e.target.value)} className="input mb-6 bg-white text-slate-900 dark:bg-white dark:text-slate-900" />
           <button
             type="submit"
             disabled={joining}
@@ -1069,7 +1069,7 @@ export default function JoinPage() {
               value={coachInput}
               onChange={(e) => setCoachInput(e.target.value)}
               placeholder="Ask the coach..."
-              className="input"
+              className="input bg-white text-slate-900 dark:bg-white dark:text-slate-900"
             />
             <button
               type="submit"
