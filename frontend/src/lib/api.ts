@@ -1,17 +1,32 @@
-// Normally the backend's own address. It can also be set to "/backend", a
-// path on LISM's own origin that next.config.js relays to the backend, which
-// is what keeps LISM working on school devices where the web filter allows
-// lismlesson.com but not the backend's separate address.
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+// The backend's own address, as configured for this deployment.
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+
+// What the browser actually calls.
+//
+// A school web filter sees LISM's pages and LISM's data as two unrelated
+// sites, because they come from two different addresses. Devices allowed one
+// but not the other showed a lesson that loaded and then said "Failed to
+// fetch" -- photographed on a school tablet, 23 Sept 2026. So in the browser
+// every request goes to a path on LISM's own origin, which next.config.js
+// relays to the backend server-side, where no filter is in the way.
+//
+// On the server there is nothing to relay through and no filter to avoid, so
+// server code keeps calling the backend directly. Local development does too:
+// there both addresses are the same machine, and going direct keeps the
+// network traffic honest about where it is really going.
+const RELAY_PATH = "/backend";
+const isBrowser = typeof window !== "undefined";
+const isSeparateAddress =
+  isBrowser &&
+  /^https?:\/\//.test(BACKEND_URL) &&
+  new URL(BACKEND_URL).origin !== window.location.origin;
+const API_BASE_URL = isSeparateAddress ? RELAY_PATH : BACKEND_URL;
 
 // A WebSocket cannot be opened through that relay, so it always goes straight
 // to the backend. On a device where that address is blocked the socket simply
 // never opens, and the page falls back to polling -- which is what correctness
 // rides on anyway. See the long note in join/[code]/page.tsx.
-const WS_BASE_URL = (
-  process.env.NEXT_PUBLIC_WS_BASE_URL ??
-  (API_BASE_URL.startsWith("http") ? API_BASE_URL : "")
-).replace(/^http/, "ws");
+const WS_BASE_URL = BACKEND_URL.replace(/^http/, "ws");
 
 // Auth lives in an httpOnly cookie the backend sets on login/signup --
 // there's no token in JS to store or attach, `credentials: "include"` is what
