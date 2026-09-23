@@ -1,4 +1,17 @@
+// Normally the backend's own address. It can also be set to "/backend", a
+// path on LISM's own origin that next.config.js relays to the backend, which
+// is what keeps LISM working on school devices where the web filter allows
+// lismlesson.com but not the backend's separate address.
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+
+// A WebSocket cannot be opened through that relay, so it always goes straight
+// to the backend. On a device where that address is blocked the socket simply
+// never opens, and the page falls back to polling -- which is what correctness
+// rides on anyway. See the long note in join/[code]/page.tsx.
+const WS_BASE_URL = (
+  process.env.NEXT_PUBLIC_WS_BASE_URL ??
+  (API_BASE_URL.startsWith("http") ? API_BASE_URL : "")
+).replace(/^http/, "ws");
 
 // Auth lives in an httpOnly cookie the backend sets on login/signup --
 // there's no token in JS to store or attach, `credentials: "include"` is what
@@ -59,6 +72,7 @@ export async function downloadFile(path: string, filename: string): Promise<void
 
 export const api = {
   base: API_BASE_URL,
+  wsBase: WS_BASE_URL,
   get: <T,>(path: string) => request<T>(path),
   post: <T,>(path: string, body?: unknown) =>
     request<T>(path, { method: "POST", body: body !== undefined ? JSON.stringify(body) : undefined }),

@@ -166,7 +166,11 @@ export default function LiveSessionPage() {
 
   useEffect(() => {
     if (!detail) return;
-    const wsBase = api.base.replace(/^http/, "ws");
+    const wsBase = api.wsBase;
+    // The teacher's live feed is the one screen that has no polling fallback,
+    // so it needs a real socket address. Deployments always set one; this only
+    // stops a misconfigured one opening a socket that cannot work.
+    if (!wsBase) return;
     // The backend requires the teacher's own JWT to open this connection --
     // otherwise anyone who knew the session code could silently watch the
     // live feed with no proof they're the teacher who owns it. The browser

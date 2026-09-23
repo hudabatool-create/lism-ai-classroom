@@ -9,7 +9,14 @@
  */
 import { NextRequest } from "next/server";
 
-const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+// This code runs on LISM's own server, so it always calls the backend's real
+// address -- never the "/backend" relay the browser may be using, which only
+// exists in the browser and would point this fetch back at ourselves.
+const API =
+  process.env.BACKEND_ORIGIN ??
+  (process.env.NEXT_PUBLIC_API_BASE_URL?.startsWith("http")
+    ? process.env.NEXT_PUBLIC_API_BASE_URL
+    : "http://localhost:8000");
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string; path: string[] }> }) {
   const { id, path } = await ctx.params;

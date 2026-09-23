@@ -546,13 +546,16 @@ export default function JoinPage() {
   // from the teacher reach this device instantly.
   useEffect(() => {
     if (!studentId) return;
-    const wsBase = api.base.replace(/^http/, "ws");
+    const wsBase = api.wsBase;
     let ws: WebSocket;
     let retry: ReturnType<typeof setTimeout> | undefined;
     let closed = false;
     let attempt = 0;
 
     const connect = () => {
+      // No socket address configured: the heartbeat below still keeps this
+      // student in step with the teacher, two seconds at worst.
+      if (!wsBase) return;
       ws = new WebSocket(`${wsBase}/api/ws/session/${code}?student_id=${studentId}`);
 
       ws.onopen = () => {
