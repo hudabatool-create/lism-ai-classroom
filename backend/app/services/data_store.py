@@ -22,6 +22,7 @@ from threading import Lock
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import load_only, noload
 from starlette.concurrency import run_in_threadpool
 
 from app.db.base import SessionLocal
@@ -74,6 +75,50 @@ def _teacher_dict(row: Teacher) -> dict:
         "password_hash": row.password_hash,
         "email_verified": row.email_verified,
         "created_at": row.created_at,
+    }
+
+
+# The columns that are cheap to read. Deliberately not `html`, and deliberately
+# not the assets.
+#
+# A deck and its images are hundreds of kilobytes, and the student page asks
+# the server for the session every two seconds so that no child is ever left
+# stranded on the waiting screen. Reading the activity in full meant each of
+# those polls dragged the entire deck out of the database: one class of 28
+# pulled roughly 200 MB a minute. That was 13 GB of Supabase bandwidth against
+# a 5.5 GB allowance, three days from the projects being cut off.
+_ACTIVITY_SUMMARY_COLUMNS = (
+    Activity.teacher_id,
+    Activity.title,
+    Activity.subject,
+    Activity.grade,
+    Activity.activity_type,
+    Activity.source,
+    Activity.manifest,
+    Activity.created_at,
+    Activity.updated_at,
+)
+
+
+def _activity_summary(row: Activity, asset_files: list[str]) -> dict:
+    """An activity without its content -- everything needed to RUN a lesson.
+
+    The manifest is here because a lesson is driven by it. The HTML is not:
+    the only things that need the deck itself are the editor and the route
+    that serves it to a student's iframe, and both ask for it by name.
+    """
+    return {
+        "id": row.id,
+        "teacher_id": row.teacher_id,
+        "title": row.title,
+        "subject": row.subject,
+        "grade": row.grade,
+        "activity_type": row.activity_type,
+        "source": row.source,
+        "manifest": row.manifest,
+        "asset_files": asset_files,
+        "created_at": row.created_at,
+        "updated_at": row.updated_at,
     }
 
 
@@ -327,16 +372,81 @@ class DataStore:
             return _activity_dict(row)
 
     def list_activities(self, teacher_id: str) -> list[dict]:
+        """The teacher's dashboard list. It shows titles, never content, so
+        loading every deck and every image to draw it was pure waste."""
         with SessionLocal() as db:
-            rows = db.scalars(
-                select(Activity).where(Activity.teacher_id == teacher_id).order_by(Activity.created_at.desc())
+            rows = list(
+                db.scalars(
+                    select(Activity)
+                    .where(Activity.teacher_id == teacher_id)
+                    .order_by(Activity.created_at.desc())
+                    .options(load_only(*_ACTIVITY_SUMMARY_COLUMNS), noload(Activity.assets))
+                )
             )
-            return [_activity_dict(r) for r in rows]
+            files = self._asset_files(db, [r.id for r in rows])
+            return [_activity_summary(r, files[r.id]) for r in rows]
+
+    @staticmethod
+    def _asset_files(db, activity_ids: list[str]) -> dict[str, list[str]]:
+        """The asset file NAMES, without reading a single byte of them.
+
+        Listing the names used to mean loading every image in the activity,
+        which is the other half of the same bandwidth problem.
+        """
+        out: dict[str, list[str]] = {aid: [] for aid in activity_ids}
+        if not activity_ids:
+            return out
+        rows = db.execute(
+            select(ActivityAsset.activity_id, ActivityAsset.path).where(
+                ActivityAsset.activity_id.in_(activity_ids)
+            )
+        )
+        for aid, path in rows:
+            out[aid].append(path)
+        for paths in out.values():
+            paths.sort()
+        return out
 
     def get_activity(self, activity_id: str) -> dict | None:
+        """Without the deck HTML or the image bytes -- see _activity_summary.
+
+        This is the one a running lesson calls, over and over. Anything that
+        genuinely needs the content asks for it by name instead.
+        """
         with SessionLocal() as db:
-            row = db.get(Activity, activity_id)
-            return _activity_dict(row) if row else None
+            row = db.scalar(
+                select(Activity)
+                .where(Activity.id == activity_id)
+                .options(load_only(*_ACTIVITY_SUMMARY_COLUMNS), noload(Activity.assets))
+            )
+            if not row:
+                return None
+            return _activity_summary(row, self._asset_files(db, [activity_id])[activity_id])
+
+    def get_activity_full(self, activity_id: str) -> dict | None:
+        """The summary plus the deck HTML. Only the editor needs this."""
+        with SessionLocal() as db:
+            row = db.scalar(
+                select(Activity).where(Activity.id == activity_id).options(noload(Activity.assets))
+            )
+            if not row:
+                return None
+            files = self._asset_files(db, [activity_id])[activity_id]
+            return {**_activity_summary(row, files), "html": row.html}
+
+    def get_activity_html(self, activity_id: str) -> str | None:
+        """Just the deck, for the route that serves it to a student's iframe."""
+        with SessionLocal() as db:
+            return db.scalar(select(Activity.html).where(Activity.id == activity_id))
+
+    def get_activity_asset(self, activity_id: str, path: str) -> bytes | None:
+        """One file's bytes. Serving a single image used to read all of them."""
+        with SessionLocal() as db:
+            return db.scalar(
+                select(ActivityAsset.content).where(
+                    ActivityAsset.activity_id == activity_id, ActivityAsset.path == path
+                )
+            )
 
     def update_activity(self, activity_id: str, title: str, subject: str, grade: str, activity_type: str, html: str, manifest: dict) -> dict:
         with SessionLocal() as db:

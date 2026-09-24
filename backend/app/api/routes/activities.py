@@ -16,8 +16,14 @@ router = APIRouter(prefix="/api/activities", tags=["activities"])
 def _public_activity(activity: dict) -> dict:
     """Activity dicts hold raw asset bytes (from a ZIP upload) which can't be
     JSON-serialized and shouldn't be sent to the client anyway -- replace
-    them with just the list of asset filenames."""
-    return {**{k: v for k, v in activity.items() if k != "assets"}, "asset_files": sorted(activity.get("assets") or {})}
+    them with just the list of asset filenames.
+
+    Summaries from the store already carry the names and never the bytes, so
+    they pass straight through."""
+    files = activity.get("asset_files")
+    if files is None:
+        files = sorted(activity.get("assets") or {})
+    return {**{k: v for k, v in activity.items() if k != "assets"}, "asset_files": files}
 
 
 @router.get("")
@@ -103,8 +109,10 @@ def generate_activity(payload: GenerateRequest, teacher: dict = Depends(get_curr
     return {**_public_activity(activity), "warning": warning}
 
 
-def _get_owned_activity(activity_id: str, teacher: dict) -> dict:
-    activity = store.get_activity(activity_id)
+def _get_owned_activity(activity_id: str, teacher: dict, *, with_html: bool = False) -> dict:
+    """`with_html` only for the editor, which puts the deck in a textarea.
+    Ownership checks need the teacher id, not several hundred kilobytes."""
+    activity = store.get_activity_full(activity_id) if with_html else store.get_activity(activity_id)
     if not activity or activity["teacher_id"] != teacher["id"]:
         raise HTTPException(status_code=404, detail="Activity not found")
     return activity
@@ -112,7 +120,7 @@ def _get_owned_activity(activity_id: str, teacher: dict) -> dict:
 
 @router.get("/{activity_id}")
 def get_activity(activity_id: str, teacher: dict = Depends(get_current_teacher)):
-    activity = _get_owned_activity(activity_id, teacher)
+    activity = _get_owned_activity(activity_id, teacher, with_html=True)
     return _public_activity(activity)
 
 
@@ -166,10 +174,10 @@ def delete_activity(activity_id: str, force: bool = False, teacher: dict = Depen
 @router.get("/{activity_id}/raw", response_class=HTMLResponse)
 def raw_activity(activity_id: str):
     """Public: students load the activity itself with no auth required."""
-    activity = store.get_activity(activity_id)
-    if not activity:
+    html = store.get_activity_html(activity_id)
+    if html is None:
         raise HTTPException(status_code=404, detail="Activity not found")
-    return HTMLResponse(activity["html"])
+    return HTMLResponse(html)
 
 
 @router.get("/{activity_id}/{asset_path:path}")
@@ -180,10 +188,7 @@ def activity_asset(activity_id: str, asset_path: str):
     this route must live at exactly this path -- not nested under an extra
     prefix -- and must be registered after /raw so that exact route keeps
     matching "raw" instead of falling through to this catch-all."""
-    activity = store.get_activity(activity_id)
-    if not activity:
-        raise HTTPException(status_code=404, detail="Activity not found")
-    asset = (activity.get("assets") or {}).get(asset_path)
+    asset = store.get_activity_asset(activity_id, asset_path)
     if asset is None:
         raise HTTPException(status_code=404, detail="Asset not found")
     media_type, _ = mimetypes.guess_type(asset_path)
