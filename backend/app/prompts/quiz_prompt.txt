@@ -63,7 +63,7 @@ Leave a format blank or 0 and it will not appear. These are not suggestions or l
 the numbers written:
 
   Multiple choice      [  ]   4 options, one correct; every wrong option a named misconception
-  True / false         [  ]   each with a one-line justification box
+  True / false         [  ]   the choice only -- no justification or "explain why" box
   Fill in the blank    [  ]   short answer; accept a pipe-separated list of spellings, and
                               mark it by the MARKING A TYPED ANSWER rules below
   Short answer         [  ]   a phrase marked against an answer key of accepted wordings
@@ -105,7 +105,12 @@ MARKING A TYPED ANSWER -- a correct answer must never be told it is wrong:
 AUTO-MARKING -- what the file may mark, and what it must not:
   Multiple choice, true/false, fill in the blank, numeric, ordering/matching and short answer all
   have answer keys. Mark those the moment the student submits: 1 for correct, 0 for incorrect, and
-  say plainly which it was. A true/false justification box is not marked; the mark is for the choice.
+  say plainly which it was.
+  NEVER ADD A BOX THAT IS NOT MARKED. No "explain your answer", no "justify your choice", no
+  "why did you pick this?" alongside a multiple choice, true/false, blank, numeric or short
+  answer. A child who writes a careful paragraph into a box that no one scores has spent quiz
+  time for nothing. If written reasoning is wanted, it is an open-ended question in its own
+  right, with its own marks, marked by the teacher.
   OPEN-ENDED QUESTIONS ARE NEVER AUTO-MARKED. No keyword test can judge written reasoning -- a
   correct answer in words the pattern did not expect would score zero, which is worse than no score
   at all. On submit show "Submitted. Your teacher will mark this one.": no mark, no zero, and never
