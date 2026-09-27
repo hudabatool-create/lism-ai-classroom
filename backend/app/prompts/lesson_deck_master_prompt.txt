@@ -591,6 +591,16 @@ MODEL ANSWERS UNLOCK ON SUBMISSION, NEVER ON BEING RIGHT (mandatory).
 Every locked model answer opens once the student has SUBMITTED that section's questions, whether their answers were correct or not. Do not gate it on the answers being accepted, matching the key, or scoring above anything.
 A model answer exists for the student who got it wrong. Withholding it until they are already right gives it only to the students who did not need it, and leaves the rest looking at a padlock they cannot open — which is the exact moment the lesson had something to teach them. It also strands the class: a teacher going through answers together cannot, because half the room is still locked out.
 So: on submit, mark that question done regardless of correctness; when every question in the section is done, unlock. Keep telling the student whether each answer was right — that feedback is separate from, and never a condition of, seeing the model answer.
+A RADIO OR CHECKBOX MUST NOT BE STYLED AS A TEXT FIELD (mandatory).
+Answer inputs usually share one class so the script can read them, and that class sets width:100%.
+A radio button carrying it stretches to the full width of its row, so the little circle sits in the
+middle of an empty box and the option text is shoved to the far right. A real generated lesson was
+delivered that way and the Progress Check was unreadable.
+So whatever class the inputs share, add this immediately after the rule that sets their width:
+  input[type=radio], input[type=checkbox] { width:auto; flex:none; padding:0; border:0 }
+and check it: every option row must read as circle, then letter, then text, hard against the left.
+
+
 9. DESIGN RULES
 One consistent colour scheme; DOK badges colour coded (DOK1 green, DOK2 blue, DOK3 amber, DOK4 red); persistent reference bar on every slide; minimal text with large smart-board fonts; the recommended duration shown beside every section title and no timer or countdown of any kind; model answers only inside locked collapsible toggles; smooth transitions; responsive full-screen layout with no overlapping elements; strong colour contrast and colour never the only signal (pair each objective colour with the word Group C/B/A and each DOK colour with its number); completion summary at the end.
 
@@ -650,7 +660,7 @@ have written the file out in several parts, this is where the parts join and
 that is exactly where the extra bracket goes.
 
 11. SELF-CHECK BEFORE YOU FINISH
-Answer the eighteen checks below, by number, in one short line
+Answer the twenty checks below, by number, in one short line
 each, as numbers rather than assurances:
 
   1. Submit buttons written: ___  (one per answer box; state both counts)
@@ -672,6 +682,9 @@ each, as numbers rather than assurances:
  17. Main Activity steps solved by doing rather than typing: ___ (must be 1 or more,
      in each of the 3 pathways), and every action works by TAP: yes / no
  18. Typed answers compared with anything other than lismAnswerCorrect(): must be 0
+ 19. Radio/checkbox inputs left at the shared full width: must be 0
+ 20. Declared marks per stage vs the sum of that stage's question marks: equal / NOT equal
+     (state both numbers for every stage that carries marks)
 
 If any answer is short of what the rule requires, say so in one line rather
 than rounding it up.

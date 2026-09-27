@@ -323,6 +323,15 @@ already shows “Test”. Put every accepted spelling in the key separated by | 
 stay wrong: “Test”, “Alan” and “machine” are all correctly refused for the Turing blank.
 
 
+A RADIO OR CHECKBOX MUST NOT BE STYLED AS A TEXT FIELD (mandatory).
+Answer inputs usually share one class so the script can read them, and that class sets width:100%.
+A radio button carrying it stretches to the full width of its row, so the little circle sits in the
+middle of an empty box and the option text is shoved to the far right. A real generated lesson was
+delivered that way and its check question was unreadable.
+So whatever class the inputs share, add this immediately after the rule that sets their width:
+  input[type=radio], input[type=checkbox] { width:auto; flex:none; padding:0; border:0 }
+and check it: every option row must read as circle, then letter, then text, hard against the left.
+
 3. LANGUAGE, SCRIPT AND RTL HANDLING
 Set  and dir from PROFILE. When dir:'rtl', mirror the whole worksheet — sticky header, section numbering, progress bar, DOK badges, tables and objective colour bars — but keep code blocks, formulae and numbers in dir:'ltr' islands so they don’t reverse. Tab order must follow reading order.
 Script-aware word counting: Arabic ؀-ۿ, Urdu, Hindi ऀ-ॿ, and Chinese/Japanese (characters ÷ 2 as an approximate word equivalent). Do not rely on Latin-only regex.
