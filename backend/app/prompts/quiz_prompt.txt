@@ -98,7 +98,33 @@ MARKING A TYPED ANSWER -- a correct answer must never be told it is wrong:
        "Turing" on its own. Strip from the key the words printed immediately before and after
        the blank, accept what remains, and accept the full phrase too.
     3. Ignore a leading article (a, an, the) and any trailing punctuation.
-  Only when all three still fail is the answer wrong. When in doubt, award the mark and say
+  Do not write this yourself -- paste this function in and route every typed answer through it.
+  It has been tested against 20 cases, including the ones that must stay wrong.
+
+  function lismAnswerCorrect(studentText, answerKey, questionText) {
+    var norm = function (s) {
+      return String(s || "").toLowerCase().trim().replace(/\s+/g, " ")
+        .normalize("NFD").replace(/[̀-ͯ]/g, "");
+    };
+    var squash = function (s) { return norm(s).replace(/[\s\-.]/g, ""); };
+    var clean = function (s) { return norm(s).replace(/^(a|an|the)\s+/, "").replace(/[.,;:!?]+$/, ""); };
+    var m = String(questionText || "").match(/(\S+)?\s*_{2,}\s*(\S+)?/);
+    var shown = m ? [m[1], m[2]].filter(Boolean).map(function (w) {
+      return norm(w).replace(/[.,;:!?]+$/, "");
+    }) : [];
+    var given = clean(studentText);
+    if (!given) return false;
+    return String(answerKey).split("|").map(function (k) { return k.trim(); }).some(function (k) {
+      if (norm(given) === norm(k)) return true;
+      if (squash(given) === squash(k)) return true;
+      var rest = norm(k).split(" ").filter(function (w) { return shown.indexOf(w) === -1; }).join(" ");
+      return !!rest && squash(given) === squash(rest);
+    });
+  }
+
+  Call it as lismAnswerCorrect(whatTheStudentTyped, theAnswerKey, theQuestionSentence), always
+  passing the question sentence, and separate accepted spellings with | in the key.
+  When in doubt, award the mark and say
   "accepted -- your teacher will review this one". A mark wrongly given can be taken back in
   the live feed; a mark wrongly refused is argued about in front of the whole class.
 

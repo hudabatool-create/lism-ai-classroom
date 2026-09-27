@@ -267,6 +267,42 @@ Drawing (draw, when PROFILE.draw) — an inline  sketch pad with the background 
 Images (image, or optional attachments on any box, when PROFILE.images) — three ways in, all client-side with nothing uploaded anywhere: paste from the clipboard (screenshot, graph, photo), choose file or drag and drop (image/* with a visible drop zone), and camera via capture="environment" so a student can photograph handwritten working on a tablet. Show a thumbnail with a Remove button, enforce the data-images limit (default 2), downscale anything wider than ~1600px and re-encode, and reject non-images or oversized files with a clear message. State on screen that images stay on the student’s own device.
 Because drawings and images cannot be auto-marked, any DOK question using them must have those marks awarded by the teacher in LISM, with the auto-estimate covering only the labels, caption and written reasoning — and the on-screen wording must make that split obvious.
 
+MARKING A TYPED ANSWER — COPY THIS FUNCTION, DO NOT WRITE YOUR OWN (mandatory).
+Two children lost marks they had earned: one wrote “power point” for PowerPoint, and one read
+“it is called the ____ Test”, wrote “Turing”, and was told she was wrong for not repeating a word
+that was already printed on the screen in front of her. Describing the rule in words was not
+enough — every deck wrote its own comparison and got it wrong again. So paste this function into
+the file exactly as written, and route EVERY short / fill-in-the-blank / typed-key answer through
+it. No other comparison, no === on raw strings, anywhere.
+
+function lismAnswerCorrect(studentText, answerKey, questionText) {
+  var norm = function (s) {
+    return String(s || "").toLowerCase().trim().replace(/\s+/g, " ")
+      .normalize("NFD").replace(/[̀-ͯ]/g, "");
+  };
+  var squash = function (s) { return norm(s).replace(/[\s\-.]/g, ""); };
+  var clean = function (s) { return norm(s).replace(/^(a|an|the)\s+/, "").replace(/[.,;:!?]+$/, ""); };
+  var m = String(questionText || "").match(/(\S+)?\s*_{2,}\s*(\S+)?/);
+  var shown = m ? [m[1], m[2]].filter(Boolean).map(function (w) {
+    return norm(w).replace(/[.,;:!?]+$/, "");
+  }) : [];
+  var given = clean(studentText);
+  if (!given) return false;
+  return String(answerKey).split("|").map(function (k) { return k.trim(); }).some(function (k) {
+    if (norm(given) === norm(k)) return true;
+    if (squash(given) === squash(k)) return true;
+    var rest = norm(k).split(" ").filter(function (w) { return shown.indexOf(w) === -1; }).join(" ");
+    return !!rest && squash(given) === squash(rest);
+  });
+}
+
+Call it as lismAnswerCorrect(whatTheStudentTyped, theAnswerKey, theQuestionSentence). Always pass
+the question sentence — that third argument is what lets “Turing” be accepted when the sentence
+already shows “Test”. Put every accepted spelling in the key separated by | (e.g.
+"CPU|central processing unit"). It has been tested against 20 cases, including the ones that must
+stay wrong: “Test”, “Alan” and “machine” are all correctly refused for the Turing blank.
+
+
 3. LANGUAGE, SCRIPT AND RTL HANDLING
 Set  and dir from PROFILE. When dir:'rtl': mirror the whole layout — reference bar, navigation, progress dots, DOK badges, tables and the objective colour bars all flow right-to-left; Next moves left and Previous moves right visually, but the arrow keys keep their logical meaning (→ = next in LTR, ← = next in RTL). Keep code blocks, formulae and numbers dir:'ltr' inside RTL text so they don’t reverse.
 Script-aware word counting: count tokens for Arabic ؀-ۿ, Urdu, Hindi ऀ-ॿ, Chinese/Japanese (character count ÷ 2 as an approximate word equivalent) — do not rely on Latin-only regex.
@@ -483,6 +519,57 @@ BUILD IT IN THE FILE: inline SVG, CSS or canvas only — never a linked image, n
 RELIABILITY BEATS AMBITION: if a genuinely interactive version cannot be built so that it works first time in one self-contained file, build the simpler version that definitely works. A diagram that works teaches more than a simulation that does not load, and the teacher will be standing in front of a class when they find out.
 Slide 6 — PROGRESS CHECK (Recommended Duration: 2 minutes, no marks): ONE question that tells the teacher, in under a minute, whether the class understood the teaching well enough to work independently. Not a quiz — a single hinge question on the one idea the Main Activity depends on. Use multiple choice (4 options) or true/false with a one-line reason box, so it marks itself instantly and the whole class's answers reach the teacher at once. Write the distractors so each wrong option reveals a specific, named misconception — the point is to show the teacher WHICH misunderstanding is in the room, not merely how many got it wrong. On accept, show the student whether they were right and one sentence of explanation; do NOT lock the next slide behind it. THIS SECTION CARRIES NO MARKS AND MUST NOT COUNT TOWARDS THE LESSON TOTAL OF 20 — set marks:null in the manifest. It is formative: a student who has not understood must feel safe saying so, and a mark here would make guessing the safer move and hide the very thing the teacher needs to see.
 Slides 7–8 — MAIN ACTIVITY (Recommended Duration: 10 minutes + feedback, 10 marks): the student first chooses their pathway — Group C, Group B or Group A — and then works through that pathway’s DOK 1 Recall (2 marks), DOK 2 Skill (3 marks), DOK 3 Application (3 marks) and DOK 4 Evaluation (2 marks) questions, then — once all four are accepted — a single Challenge / Extension Task written for that pathway. Generate all three pathways and all three challenge tasks in full, as specified in Section 7b: Select Pathway → DOK 1 → DOK 2 → DOK 3 → DOK 4 → one final Challenge Task. Choose the answer type per question — typically short/numeric for DOK 1, numeric/symbolic/code/draw/mixed for DOK 2, mixed for DOK 3, prose for DOK 4 — and where the subject’s real answer is a diagram, graph, circuit, map or handwritten working, use draw or image (or mixed with an explanation beside it) rather than forcing a written description. Instruction: “Answers must include at least 2 key terms” (for prose parts; for numeric/symbolic parts require correct method or units instead, and say so on screen). Note: “Feedback: teacher gives feedback on responses and students may defend their work.” Slide 8 shows the rubric.
+ONE STEP OF THE MAIN ACTIVITY MUST BE PLAYED, NOT TYPED (mandatory).
+Four text boxes in a row is the same lesson four times, and by the third one the class has stopped
+thinking and started producing sentences. So AT LEAST ONE of DOK 1–3 is solved by DOING something —
+dragging, tapping, ordering, building, hunting — and the Challenge Task at the end is a puzzle
+wherever the subject allows one. It carries that DOK’s marks exactly as a typed answer would, marks
+itself the same way, and reports to LISM the same way. Nothing else about the structure changes.
+
+IT MUST TEACH THE OBJECTIVE, NOT DECORATE IT. The test: could a student win it without
+understanding today’s learning objective? If yes, it is a toy — rebuild it. The thing being dragged,
+matched or ordered IS the content.
+
+Choose the form that fits the idea. This menu, or something better suited to [TOPIC NAME]:
+  Put it in order — steps of a method, events on a timeline, lines of an algorithm, stages of a
+    process, a paragraph’s sentences. Works in every subject and is the easiest to build reliably.
+  Match the pairs — term to definition, cause to effect, symbol to meaning, word to translation,
+    formula to what it calculates, code to its output.
+  Sort into groups — drop each example under the right category; the categories are the lesson’s
+    classification and the examples are the judgement.
+  Find the mistake — a worked solution, a sentence, a circuit or a piece of code with a deliberate
+    error planted in it; the student finds it, then says what is wrong in one line.
+  Build it from parts — assemble an equation, a circuit, a sentence, a flowchart, a balanced
+    reaction, a labelled diagram from pieces supplied.
+  Choose the path — a branching problem where each choice leads on, so a wrong turn shows its
+    consequence instead of just being marked wrong.
+  Unlock it — each correct answer reveals one letter or number, and the letters spell the key term.
+Use the subject’s own objects: Chemistry balances a real equation, History orders real events,
+English rebuilds a real sentence, CS traces real code, PE sequences a real technique.
+
+RULES IT MUST OBEY
+  Tablets first. Every action must work by TAP — tap to pick up, tap to place. Drag may be offered
+    as well, but never as the only way, or half the class cannot play it at all.
+  Keyboard too: every piece reachable by Tab and placeable by Enter or Space.
+  Colour is never the only signal — pair it with a label, a shape or an icon, as elsewhere in this
+    file.
+  No timer, no countdown, no score clock. The teacher paces the lesson; this rule has no exceptions.
+  No lives, no streaks, nothing that punishes trying. A wrong placement bounces back and says WHY
+    in one short line — that sentence is the teaching, and it is the whole reason to build this
+    rather than another text box.
+  Retrying is free and unlimited. What is marked is where the student finished, not how many
+    attempts it took.
+  Blank still means blank: a student who touches nothing scores nothing, exactly as with a text box.
+  All three pathways get one, at their own demand: Group C orders 4 items with the first already
+    placed, Group B orders 6 unaided, Group A orders 6 and justifies the two that are most easily
+    confused.
+  Built in the file — inline SVG, CSS and JavaScript only. No CDN, no linked image, no library. It
+    must work with the wifi off.
+  RELIABILITY BEATS AMBITION. If a genuinely playable version cannot be built so that it works
+    first time in one self-contained file, build the simpler one that definitely works — ordering
+    four cards by tapping beats a physics sandbox that does not load. The teacher will be standing
+    in front of a class when they find out.
+
 Marking as the student submits (mandatory): the moment a DOK response is accepted, mark it against the rubric and show next to that question the rubric level (0–3), the descriptor matched (e.g. “Mostly correct”) and marks earned out of that DOK’s maximum. Mirror every mark into a “Your mark” column in the slide 8 rubric table, update a running total out of 10 live in the rubric header and the navigation bar, and flag criteria still unmarked. Marking basis depends on answer type: correctness against the answer key for numeric, symbolic, chem, short and code (full marks = correct with valid method/units/structure; partial = right method wrong value, or right value wrong units/sig figs; low = attempt only); depth, key-term coverage and reasoning for prose and the prose half of mixed; ticked criteria plus justification for checklist; for draw and image, auto-mark only the labels, caption and reasoning and show “awaiting teacher mark” for the diagram or attachment rather than a guessed score. Label the total “estimated — teacher’s mark is final” and give the teacher a 0/1/2/3 override selector per DOK that recalculates the total.
 MAIN TASK MARKING RUBRIC (10 marks total): DOK 1 Knowledge/Recall — 3: Correct, uses key terms, 2: Mostly correct, 1: Partial, 0: Blank or gibberish — /2. DOK 2 Skill/Accuracy — 3: Fully correct and explained, 2: Mostly correct, 1: Partial and weak, 0: Blank or gibberish — /3. DOK 3 Application — 3: Clear reasoning, 2: Mostly applied, 1: Partial, 0: Blank or gibberish — /3. DOK 4 Evaluation — 3: Well-justified, 2: Reasonable, 1: Limited, 0: Blank or gibberish — /2. TOTAL — /10.
 Slide 9 — CONNECTION LINK (Recommended Duration: 3 minutes) — TEACHER’S CHOICE: four tabs at the top — “UAE National Identity”, “Moral Education / Values”, “Cross-Curricular Link”, “AI Link”; clicking one reveals that version and hides the others. Generate all four: (1) UAE National Identity — one sentence on how this lesson connects meaningfully to UAE culture, heritage, environment, values or national priorities, followed by three short differentiated criteria: Group C recognises and engages accurately with the UAE context, Group B demonstrates understanding through appropriate application, Group A shows nuanced or implicit understanding of the context and values; (2) Moral Education / Values — which values this lesson develops and HOW, drawn from respect, empathy, integrity, responsibility and collaboration, written as something the student does rather than a list of words; (3) Cross-Curricular Link — one sentence connecting the topic to another school subject, with the reason for the connection rather than just its name; (4) AI Link — one sentence on how AI or emerging technology relates to or is transforming this topic. Each has a short student response box and a 3-option poll that tallies live when clicked. Warm gold or green accent.
@@ -563,7 +650,7 @@ have written the file out in several parts, this is where the parts join and
 that is exactly where the extra bracket goes.
 
 11. SELF-CHECK BEFORE YOU FINISH
-Answer the sixteen rules at the top of this prompt, by number, in one short line
+Answer the eighteen checks below, by number, in one short line
 each, as numbers rather than assurances:
 
   1. Submit buttons written: ___  (one per answer box; state both counts)
@@ -582,6 +669,9 @@ each, as numbers rather than assurances:
  14. Rubric criteria in the manifest: ___, of which objective: ___ and teacher-marked: ___
  15. Waiting/curtain screens this file draws itself: must be 0
  16. Approvals or saves promised that LISM cannot deliver: must be 0
+ 17. Main Activity steps solved by doing rather than typing: ___ (must be 1 or more,
+     in each of the 3 pathways), and every action works by TAP: yes / no
+ 18. Typed answers compared with anything other than lismAnswerCorrect(): must be 0
 
 If any answer is short of what the rule requires, say so in one line rather
 than rounding it up.

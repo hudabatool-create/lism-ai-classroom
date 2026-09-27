@@ -287,6 +287,42 @@ Attachments are included in the download file and the completed printout, and ar
 State plainly on the worksheet that images stay on the student’s own device.
 Because drawings and images cannot be auto-marked, any DOK question using them must have its diagram/image marks awarded by the teacher in LISM, with the auto-estimate covering only the caption, labels and written reasoning — and the on-screen wording must make that split obvious.
 
+MARKING A TYPED ANSWER — COPY THIS FUNCTION, DO NOT WRITE YOUR OWN (mandatory).
+Two children lost marks they had earned: one wrote “power point” for PowerPoint, and one read
+“it is called the ____ Test”, wrote “Turing”, and was told she was wrong for not repeating a word
+that was already printed on the screen in front of her. Describing the rule in words was not
+enough — every deck wrote its own comparison and got it wrong again. So paste this function into
+the file exactly as written, and route EVERY short / fill-in-the-blank / typed-key answer through
+it. No other comparison, no === on raw strings, anywhere.
+
+function lismAnswerCorrect(studentText, answerKey, questionText) {
+  var norm = function (s) {
+    return String(s || "").toLowerCase().trim().replace(/\s+/g, " ")
+      .normalize("NFD").replace(/[̀-ͯ]/g, "");
+  };
+  var squash = function (s) { return norm(s).replace(/[\s\-.]/g, ""); };
+  var clean = function (s) { return norm(s).replace(/^(a|an|the)\s+/, "").replace(/[.,;:!?]+$/, ""); };
+  var m = String(questionText || "").match(/(\S+)?\s*_{2,}\s*(\S+)?/);
+  var shown = m ? [m[1], m[2]].filter(Boolean).map(function (w) {
+    return norm(w).replace(/[.,;:!?]+$/, "");
+  }) : [];
+  var given = clean(studentText);
+  if (!given) return false;
+  return String(answerKey).split("|").map(function (k) { return k.trim(); }).some(function (k) {
+    if (norm(given) === norm(k)) return true;
+    if (squash(given) === squash(k)) return true;
+    var rest = norm(k).split(" ").filter(function (w) { return shown.indexOf(w) === -1; }).join(" ");
+    return !!rest && squash(given) === squash(rest);
+  });
+}
+
+Call it as lismAnswerCorrect(whatTheStudentTyped, theAnswerKey, theQuestionSentence). Always pass
+the question sentence — that third argument is what lets “Turing” be accepted when the sentence
+already shows “Test”. Put every accepted spelling in the key separated by | (e.g.
+"CPU|central processing unit"). It has been tested against 20 cases, including the ones that must
+stay wrong: “Test”, “Alan” and “machine” are all correctly refused for the Turing blank.
+
+
 3. LANGUAGE, SCRIPT AND RTL HANDLING
 Set  and dir from PROFILE. When dir:'rtl', mirror the whole worksheet — sticky header, section numbering, progress bar, DOK badges, tables and objective colour bars — but keep code blocks, formulae and numbers in dir:'ltr' islands so they don’t reverse. Tab order must follow reading order.
 Script-aware word counting: Arabic ؀-ۿ, Urdu, Hindi ऀ-ॿ, and Chinese/Japanese (characters ÷ 2 as an approximate word equivalent). Do not rely on Latin-only regex.
