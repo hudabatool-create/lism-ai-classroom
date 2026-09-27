@@ -519,18 +519,47 @@ BUILD IT IN THE FILE: inline SVG, CSS or canvas only — never a linked image, n
 RELIABILITY BEATS AMBITION: if a genuinely interactive version cannot be built so that it works first time in one self-contained file, build the simpler version that definitely works. A diagram that works teaches more than a simulation that does not load, and the teacher will be standing in front of a class when they find out.
 Slide 6 — PROGRESS CHECK (Recommended Duration: 2 minutes, no marks): ONE question that tells the teacher, in under a minute, whether the class understood the teaching well enough to work independently. Not a quiz — a single hinge question on the one idea the Main Activity depends on. Use multiple choice (4 options) or true/false with a one-line reason box, so it marks itself instantly and the whole class's answers reach the teacher at once. Write the distractors so each wrong option reveals a specific, named misconception — the point is to show the teacher WHICH misunderstanding is in the room, not merely how many got it wrong. On accept, show the student whether they were right and one sentence of explanation; do NOT lock the next slide behind it. THIS SECTION CARRIES NO MARKS AND MUST NOT COUNT TOWARDS THE LESSON TOTAL OF 20 — set marks:null in the manifest. It is formative: a student who has not understood must feel safe saying so, and a mark here would make guessing the safer move and hide the very thing the teacher needs to see.
 Slides 7–8 — MAIN ACTIVITY (Recommended Duration: 10 minutes + feedback, 10 marks): the student first chooses their pathway — Group C, Group B or Group A — and then works through that pathway’s DOK 1 Recall (2 marks), DOK 2 Skill (3 marks), DOK 3 Application (3 marks) and DOK 4 Evaluation (2 marks) questions, then — once all four are accepted — a single Challenge / Extension Task written for that pathway. Generate all three pathways and all three challenge tasks in full, as specified in Section 7b: Select Pathway → DOK 1 → DOK 2 → DOK 3 → DOK 4 → one final Challenge Task. Choose the answer type per question — typically short/numeric for DOK 1, numeric/symbolic/code/draw/mixed for DOK 2, mixed for DOK 3, prose for DOK 4 — and where the subject’s real answer is a diagram, graph, circuit, map or handwritten working, use draw or image (or mixed with an explanation beside it) rather than forcing a written description. Instruction: “Answers must include at least 2 key terms” (for prose parts; for numeric/symbolic parts require correct method or units instead, and say so on screen). Note: “Feedback: teacher gives feedback on responses and students may defend their work.” Slide 8 shows the rubric.
-ONE STEP OF THE MAIN ACTIVITY MUST BE PLAYED, NOT TYPED (mandatory).
+DOK 1 IS ALWAYS PLAYED, NEVER TYPED (mandatory).
 Four text boxes in a row is the same lesson four times, and by the third one the class has stopped
-thinking and started producing sentences. So AT LEAST ONE of DOK 1–3 is solved by DOING something —
-dragging, tapping, ordering, building, hunting — and the Challenge Task at the end is a puzzle
-wherever the subject allows one. It carries that DOK’s marks exactly as a typed answer would, marks
-itself the same way, and reports to LISM the same way. Nothing else about the structure changes.
+thinking and started producing sentences. So the DOK 1 Recall question, in ALL THREE pathways, is a
+tap-to-match game — not a text box. It carries DOK 1’s 2 marks exactly as a typed answer would, marks
+itself, locks on submit and reports to LISM identically. Nothing else about the structure changes.
+Beyond that, at least one of DOK 2–3 should also be solved by doing where the subject allows, and so
+should the Challenge Task at the end.
+
+THE MATCH GAME — BUILD IT EXACTLY LIKE THIS.
+Two columns of buttons: the terms on the left, what each one DOES on the right, in a different order.
+The student taps a term (it highlights), then taps a meaning. Right: both tiles lock green with a
+✓ and a one-line reason (“Matched — a router forwards; it never rebuilds the message”). Wrong: the
+tile shakes, bounces straight back, and says which idea it really belongs to — that sentence is the
+teaching, and it is the whole reason this is not another text box. A running “Matched: 2 / 5” sits
+under the board. Submit sends whatever has been matched.
+  Use <button type="button"> tiles, never divs — that is what makes them work by tap on a tablet AND
+  by Tab and Enter on a keyboard, with no extra code.
+  Because only a correct pair can ever lock, the mark is simply how much of the board they finished:
+  all pairs = full marks, otherwise marks x matched / total, rounded to the nearest half. Retrying
+  costs nothing and is never counted. Matching nothing at all is refused, like any empty box.
+  The ✓ matters: colour is never the only signal.
+  Two columns side by side, collapsing to one on a narrow screen.
+  Meanings go in a different order from the terms, but the SAME order for every student, so the
+  teacher can talk about “the third one down” and the whole room is looking at the same tile.
+DIFFERENTIATE BY HOW CONFUSABLE THE MEANINGS ARE, not by how many words they contain:
+  Group C — 4 pairs, plainly worded, each meaning obviously belonging to one term.
+  Group B — 5 pairs, including the two terms this topic most often blurs together.
+  Group A — 6 pairs written deliberately close to one another, so the difference between them IS the
+    question: “identifies WHERE a device is” against “the lookup that turns a name into that
+    address”; “forwards it one hop closer” against “returned by the receiver, never by a router”.
+    Group A should have to read carefully rather than pattern-match.
+If matching genuinely does not fit the topic, the DOK 1 game may instead be sorting into groups or
+putting items in order — but it is still played, still in all three pathways, and still obeys every
+rule below.
 
 IT MUST TEACH THE OBJECTIVE, NOT DECORATE IT. The test: could a student win it without
 understanding today’s learning objective? If yes, it is a toy — rebuild it. The thing being dragged,
 matched or ordered IS the content.
 
-Choose the form that fits the idea. This menu, or something better suited to [TOPIC NAME]:
+For the OTHER played steps — DOK 2 or 3, and the Challenge Task — choose the form that fits the
+idea. This menu, or something better suited to [TOPIC NAME]:
   Put it in order — steps of a method, events on a timeline, lines of an algorithm, stages of a
     process, a paragraph’s sentences. Works in every subject and is the easiest to build reliably.
   Match the pairs — term to definition, cause to effect, symbol to meaning, word to translation,
@@ -679,8 +708,8 @@ each, as numbers rather than assurances:
  14. Rubric criteria in the manifest: ___, of which objective: ___ and teacher-marked: ___
  15. Waiting/curtain screens this file draws itself: must be 0
  16. Approvals or saves promised that LISM cannot deliver: must be 0
- 17. Main Activity steps solved by doing rather than typing: ___ (must be 1 or more,
-     in each of the 3 pathways), and every action works by TAP: yes / no
+ 17. DOK 1 built as a played game rather than a text box: ___ of 3 pathways (must be 3),
+     pairs per pathway: C ___ B ___ A ___, and every tile is a <button>: yes / no
  18. Typed answers compared with anything other than lismAnswerCorrect(): must be 0
  19. Radio/checkbox inputs left at the shared full width: must be 0
  20. Declared marks per stage vs the sum of that stage's question marks: equal / NOT equal
