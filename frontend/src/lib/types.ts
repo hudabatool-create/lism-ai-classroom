@@ -49,6 +49,10 @@ export interface LessonManifest {
    */
   reportsMarks?: boolean;
   lessonType: string;
+  /** The language the lesson is taught in, and its writing direction.
+   *  LISM's own strip on the student screen follows these. */
+  lang?: string | null;
+  dir?: string | null;
   subject: string;
   grade: string;
   week: string;

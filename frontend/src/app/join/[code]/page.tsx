@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { installCopyGuard } from "@/lib/copyGuard";
 import { serverNow, syncClock } from "@/lib/serverClock";
 import { collectAnswers, watchSubmits } from "@/lib/harvest";
+import { lessonDir, lessonLang, strings } from "@/lib/lessonStrings";
 import { installLockstep, type LockstepHandle } from "@/lib/lockstep";
 import { playTimerSound, type TimerSound } from "@/lib/timerSound";
 import type { LessonManifest, SessionType, Stage } from "@/lib/types";
@@ -149,6 +150,19 @@ export default function JoinPage() {
   const params = useParams<{ code: string }>();
   const code = params.code;
   const [info, setInfo] = useState<JoinInfo | null>(null);
+
+  // The language the lesson is taught in. LISM's own strip follows it, so an
+  // Arabic lesson is not framed in English furniture.
+  const lang = lessonLang(info?.activity.manifest);
+  const dir = lessonDir(info?.activity.manifest);
+  const L = strings(lang);
+  // Callbacks and effects below are created on the first render, before the
+  // lesson has loaded and while the language is still unknown. Reading it
+  // through a ref stops them capturing the English default and keeping it for
+  // the whole lesson.
+  const langRef = useRef(lang);
+  langRef.current = lang;
+  const tr = useCallback(() => strings(langRef.current), []);
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [grade, setGrade] = useState("");
@@ -443,7 +457,7 @@ export default function JoinPage() {
         .post(`/api/join/${code}/response`, { student_id: studentId, stage_id: stageId, correct, answer, mark })
         .then(() => {
           setSubmittedCount((n) => n + 1);
-          setFlash("Response submitted — your teacher can see it live.");
+          setFlash(tr().submitted);
           setTimeout(() => setFlash(null), 3000);
         })
         .catch((err) => {
@@ -529,7 +543,7 @@ export default function JoinPage() {
       })
       .then(() => {
         setSubmittedCount((n) => n + 1);
-        setFlash("Answer sent to your teacher.");
+        setFlash(tr().sentToTeacher);
         setTimeout(() => setFlash(null), 3000);
       })
       .catch(() => {
@@ -619,13 +633,13 @@ export default function JoinPage() {
         api
           .get<StudentReport>(`/api/join/${code}/report/${studentId}`)
           .then((r) => setReport(r))
-          .catch(() => setFlash("Your teacher ended the lesson."));
+          .catch(() => setFlash(tr().lessonEnded));
       } else if (msg.type === "focus_unlocked") {
         // The teacher has spoken to this student and let them back in.
         setLocked(null);
         setWarning(null);
         awayRef.current = false;
-        setFlash("Your teacher has unlocked your screen — you can carry on.");
+        setFlash(tr().unlocked);
         setTimeout(() => setFlash(null), 5000);
         resyncRef.current?.();
       } else if (msg.type === "settings_updated") {
@@ -748,7 +762,7 @@ export default function JoinPage() {
   useEffect(() => {
     if (!copyProtected || !studentId) return;
     const warn = () => {
-      setFlash("Copy and paste are switched off for this lesson — please type your answer.");
+      setFlash(tr().copyBlocked);
       setTimeout(() => setFlash(null), 2500);
     };
     const teardown = [installCopyGuard(document, { onBlocked: warn })];
@@ -924,25 +938,24 @@ export default function JoinPage() {
             <Logo size="sm" />
           </div>
           <h1 className="mb-1 text-xl font-semibold text-slate-900 dark:text-white">{info.activity.title}</h1>
-          <p className="mb-6 text-sm text-slate-500 dark:text-slate-400">Enter your details to join.</p>
+          <p className="mb-6 text-sm text-slate-500 dark:text-slate-400">{L.joinTitle}</p>
           {info.session.session_type === "assessment" && (
             <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300">
-              This is an assessment. Leaving this window will be recorded, and repeated exits will lock your
-              activity.
+              {L.assessmentNotice}
             </p>
           )}
-          <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Name</label>
+          <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">{L.name}</label>
           <input required value={name} onChange={(e) => setName(e.target.value)} className="input mb-4 bg-white text-slate-900 dark:bg-white dark:text-slate-900" />
-          <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Grade</label>
+          <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">{L.grade}</label>
           <input value={grade} onChange={(e) => setGrade(e.target.value)} className="input mb-4 bg-white text-slate-900 dark:bg-white dark:text-slate-900" />
-          <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Section</label>
+          <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">{L.section}</label>
           <input value={section} onChange={(e) => setSection(e.target.value)} className="input mb-6 bg-white text-slate-900 dark:bg-white dark:text-slate-900" />
           <button
             type="submit"
             disabled={joining}
             className="w-full rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
           >
-            {joining ? "Joining..." : "Join Activity"}
+            {joining ? L.joining : L.join}
           </button>
         </form>
       </div>
@@ -953,7 +966,9 @@ export default function JoinPage() {
   const stageMarks = currentStageRef.current?.marks ?? info?.current_stage?.marks ?? null;
 
   return (
-    <div className="relative flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">
+    // LISM's own strip speaks the lesson's language and mirrors with it, so
+    // an Arabic lesson is not framed in English furniture.
+    <div dir={dir} className="relative flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">
       {/* The teacher's countdown, mirrored. Read-only by design -- there are
           deliberately no controls here for the student. */}
       {remainingSeconds !== null && (
@@ -965,7 +980,7 @@ export default function JoinPage() {
           {stageLabel && <span className="opacity-90">{stageLabel}</span>}
           <span className="font-mono text-base font-semibold tabular-nums">{formatClock(remainingSeconds)}</span>
           <span className="opacity-90">
-            {paused ? "paused by your teacher" : remainingSeconds === 0 ? "time's up — wait for your teacher" : "left"}
+            {paused ? L.pausedByTeacher : remainingSeconds === 0 ? L.timesUpShort : L.timeLeft}
           </span>
         </div>
       )}
@@ -974,18 +989,18 @@ export default function JoinPage() {
           told "you will be graded" who then sees nothing stops believing it. */}
       {stageMarks !== null && stageMarks > 0 && !report && (
         <div className="bg-brand-600 px-4 py-2 text-center text-sm font-medium text-white">
-          {stageMarks} mark{stageMarks === 1 ? "" : "s"} &mdash; your teacher will see and review this
+          {L.marksBanner(stageMarks)}
         </div>
       )}
       {timeUp && !report && (
         <div className="bg-red-600 px-4 py-3 text-center text-base font-semibold text-white">
-          ⏰ Time&apos;s Up! Please stop working and wait for your teacher&apos;s instructions.
+          {L.timesUpBanner}
         </div>
       )}
       {reconnected && (
         <div className="bg-brand-600 px-4 py-2 text-center text-sm font-medium text-white">
-          Welcome back &mdash; you&apos;re back in the same lesson
-          {submittedCount > 0 && `, with your ${submittedCount} answer${submittedCount === 1 ? "" : "s"} saved`}.
+          {L.welcomeBack}
+          {submittedCount > 0 && L.answersSaved(submittedCount)}.
         </div>
       )}
       {flash && <div className="bg-green-600 px-4 py-2 text-center text-sm font-medium text-white">{flash}</div>}
@@ -1024,13 +1039,13 @@ export default function JoinPage() {
             onClick={handleNeedHelp}
             className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600"
           >
-            {helpSent ? "Your teacher has been notified" : "Need help?"}
+            {helpSent ? L.helpSent : L.needHelp}
           </button>
           <button
             onClick={() => setCoachOpen(true)}
             className="rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-brand-700"
           >
-            AI Learning Coach
+            {L.coach}
           </button>
         </div>
       )}
@@ -1038,7 +1053,7 @@ export default function JoinPage() {
       {!locked && coachOpen && (
         <div className="fixed bottom-4 right-4 flex h-[28rem] w-80 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
           <div className="flex items-center justify-between bg-brand-600 px-4 py-3">
-            <p className="text-sm font-semibold text-white">AI Learning Coach</p>
+            <p className="text-sm font-semibold text-white">{L.coach}</p>
             <button onClick={() => setCoachOpen(false)} className="text-white/80 hover:text-white" aria-label="Close">
               ✕
             </button>
@@ -1062,13 +1077,13 @@ export default function JoinPage() {
                 {m.content}
               </div>
             ))}
-            {coachSending && <p className="text-xs text-slate-400">Coach is typing...</p>}
+            {coachSending && <p className="text-xs text-slate-400">{L.coachTyping}</p>}
           </div>
           <form onSubmit={handleCoachSend} className="flex gap-2 border-t border-slate-200 p-2 dark:border-slate-700">
             <input
               value={coachInput}
               onChange={(e) => setCoachInput(e.target.value)}
-              placeholder="Ask the coach..."
+              placeholder={L.coachAsk}
               className="input bg-white text-slate-900 dark:bg-white dark:text-slate-900"
             />
             <button
@@ -1176,14 +1191,14 @@ export default function JoinPage() {
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-950/95 px-6 text-center">
           <div className="max-w-md">
             <Logo size="sm" />
-            <p className="mt-6 text-lg font-semibold text-white">Waiting for your teacher</p>
+            <p className="mt-6 text-lg font-semibold text-white">{L.waitingTitle}</p>
             <p className="mt-3 text-sm text-slate-300">
               {timer.status === "ended"
-                ? "That section is finished. Your teacher will start the next one shortly."
-                : "The lesson will appear here as soon as your teacher starts the first section."}
+                ? L.waitingNext
+                : L.waitingFirst}
             </p>
             <p className="mt-4 text-xs text-slate-500">
-              You&apos;re connected. Nothing else to do — just wait.
+              {L.connected}
             </p>
             {/* Add ?debug=1 to the join URL to see why this screen is showing.
                 Invisible to students, and the difference between diagnosing

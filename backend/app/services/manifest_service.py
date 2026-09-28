@@ -148,6 +148,47 @@ def _normalize_stage(raw: dict, index: int) -> dict:
     }
 
 
+# Scripts written right to left, by the Unicode block their letters live in.
+_RTL_RANGES = (
+    ("֐", "׿"),   # Hebrew
+    ("؀", "ۿ"),   # Arabic
+    ("ݐ", "ݿ"),   # Arabic Supplement
+    ("ࢠ", "ࣿ"),   # Arabic Extended-A
+    ("ﭐ", "﷿"),   # Arabic Presentation Forms-A
+    ("ﹰ", "﻿"),   # Arabic Presentation Forms-B
+)
+
+
+def _looks_rtl(text: str) -> bool:
+    """Does this text contain right-to-left letters?
+
+    Used only when the activity did not say. A lesson that declares its own
+    language is always believed -- this is the fallback for the many decks
+    written before the manifest carried the field.
+    """
+    for ch in text or "":
+        for lo, hi in _RTL_RANGES:
+            if lo <= ch <= hi:
+                return True
+    return False
+
+
+def _language(raw: dict) -> str:
+    declared = str(raw.get("lang") or "").strip()
+    if declared:
+        return declared
+    sample = " ".join(str(raw.get(k) or "") for k in ("topic", "subject"))
+    sample += " ".join(str(s.get("label") or "") for s in (raw.get("stages") or []))
+    return "ar" if _looks_rtl(sample) else "en"
+
+
+def _direction(raw: dict) -> str:
+    declared = str(raw.get("dir") or "").strip().lower()
+    if declared in ("rtl", "ltr"):
+        return declared
+    return "rtl" if _language(raw) == "ar" else "ltr"
+
+
 def _normalize_manifest(raw: dict) -> dict:
     stages_raw = raw.get("stages") or []
     stages = [_normalize_stage(s, i) for i, s in enumerate(stages_raw)] or [_normalize_stage({}, 0)]
@@ -163,6 +204,11 @@ def _normalize_manifest(raw: dict) -> dict:
         "dok": raw.get("dok", []),
         "deliveryMode": raw.get("deliveryMode", "lesson"),
         "sessionType": raw.get("sessionType", "lesson"),
+        # The language the lesson is taught in, so LISM's own strip around the
+        # activity can speak it too. An Arabic lesson inside an English frame
+        # reads as half-finished to the teacher it was built for.
+        "lang": _language(raw),
+        "dir": _direction(raw),
         "stages": stages,
         "totalMarks": _coerce_marks(sum(s["marks"] or 0 for s in stages)),
     }
