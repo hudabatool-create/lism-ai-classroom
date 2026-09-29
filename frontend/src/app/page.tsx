@@ -38,6 +38,24 @@ export default function HomePage() {
           create an account
         </Link>
       </p>
+
+      {/* A web filter's classifier reads this page and follows its links. With
+          nothing here but a join box, the site was filed under a generic
+          category and blocked on the school's student devices. These lines say
+          plainly what this is and lead to the pages that explain it. */}
+      <footer className="mt-16 max-w-xl">
+        <p className="text-xs leading-6 text-slate-500 dark:text-slate-400">
+          LISM Lesson is an educational platform used by teachers at Liwa International School Al
+          Mushrif, Abu Dhabi, UAE, to run lessons in class. It carries no advertising and no public
+          content, and a lesson can only be opened with a code given by a teacher.
+        </p>
+        <nav className="mt-4 flex flex-wrap justify-center gap-x-5 gap-y-2 text-xs text-slate-500 dark:text-slate-400">
+          <Link href="/about" className="hover:underline">About</Link>
+          <Link href="/privacy" className="hover:underline">Privacy</Link>
+          <Link href="/terms" className="hover:underline">Terms</Link>
+          <Link href="/contact" className="hover:underline">Contact</Link>
+        </nav>
+      </footer>
     </main>
   );
 }
