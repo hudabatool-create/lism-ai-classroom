@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import StagePreview from "@/components/StagePreview";
 import StatCard from "@/components/StatCard";
 import { api } from "@/lib/api";
@@ -141,43 +141,95 @@ export default function LiveSessionPage() {
   const [pinnedStage, setPinnedStage] = useState<string | null>(null);
   const [unlocking, setUnlocking] = useState<string | null>(null);
   const [stageActionPending, setStageActionPending] = useState(false);
+  // True when the live connection is down, so the teacher is told the
+  // screen may be behind rather than quietly trusting a frozen page.
+  const [stale, setStale] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoadError(null);
-    api
-      .get<SessionDetail>(`/api/sessions/${sessionId}`)
-      .then((d) => {
-        if (cancelled) return;
+  /** Ask the server for the truth about this session.
+   *
+   * Used on load, whenever the live connection comes back, whenever the
+   * teacher returns to the tab, and on a slow safety poll. Everything this
+   * page shows can be rebuilt from one of these, which is what stops a
+   * dropped connection leaving the screen wrong until a manual refresh.
+   */
+  const refresh = useCallback(
+    async (opts: { quiet?: boolean } = {}) => {
+      try {
+        const d = await api.get<SessionDetail>(`/api/sessions/${sessionId}`);
         // Correct this laptop's clock against the server's, so the teacher's
         // countdown and every student's agree even when the devices don't.
         syncClock(d.server_time);
         setDetail(d);
-      })
-      // Without this the page sat on "Loading session..." forever whenever
-      // the request failed, with nothing on screen explaining why.
-      .catch((err) => {
-        if (!cancelled) setLoadError(err instanceof Error ? err.message : "Could not load this session");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [sessionId]);
+        setLoadError(null);
+        setStale(false);
+        return true;
+      } catch (err) {
+        // A background refresh that fails must not replace a working screen
+        // with an error page -- the teacher is mid-lesson. Only the first
+        // load, which has nothing to show yet, is allowed to do that.
+        if (!opts.quiet) {
+          setLoadError(err instanceof Error ? err.message : "Could not load this session");
+        }
+        return false;
+      }
+    },
+    [sessionId],
+  );
+
+  useEffect(() => {
+    setLoadError(null);
+    void refresh();
+  }, [refresh]);
 
   useEffect(() => {
     if (!detail) return;
     const wsBase = api.wsBase;
-    // The teacher's live feed is the one screen that has no polling fallback,
-    // so it needs a real socket address. Deployments always set one; this only
-    // stops a misconfigured one opening a socket that cannot work.
-    if (!wsBase) return;
-    // The backend requires the teacher's own JWT to open this connection --
-    // otherwise anyone who knew the session code could silently watch the
-    // live feed with no proof they're the teacher who owns it. The browser
-    // attaches the httpOnly session cookie to this handshake automatically.
-    const ws = new WebSocket(`${wsBase}/api/ws/session/${detail.session.code}`);
+    if (!wsBase) {
+      // No socket address configured: the poll below still keeps this screen
+      // honest, a few seconds behind rather than frozen.
+      setStale(true);
+      return;
+    }
+    const code = detail.session.code;
+    let ws: WebSocket | undefined;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    let closed = false;
+    let attempt = 0;
 
-    ws.onmessage = (event) => {
+    /* This socket used to be opened once, with no onclose and no retry, and
+       the page had nothing else to fall back on. So the first time it dropped
+       -- a sleeping laptop, a wifi blip, the school filter, or simply the
+       server being redeployed -- the teacher's screen went deaf for the rest
+       of the lesson. Start and End still worked and the students still moved;
+       only the teacher's own screen stopped being told, and the stage chips
+       never changed colour until the tab was refreshed by hand. */
+    const connect = () => {
+      // The backend requires the teacher's own JWT to open this connection --
+      // otherwise anyone who knew the session code could silently watch the
+      // live feed with no proof they're the teacher who owns it. The browser
+      // attaches the httpOnly session cookie to this handshake automatically.
+      ws = new WebSocket(`${wsBase}/api/ws/session/${code}`);
+
+      ws.onopen = () => {
+        attempt = 0;
+        setStale(false);
+        // Catch up on everything that happened while the socket was down.
+        void refresh({ quiet: true });
+      };
+
+      ws.onclose = () => {
+        if (closed) return;
+        setStale(true);
+        // Back off, but never further than ten seconds: this is a teacher
+        // standing in front of a class, not a background tab.
+        const wait = Math.min(10000, 500 * 2 ** attempt);
+        attempt += 1;
+        retry = setTimeout(connect, wait);
+      };
+
+      ws.onerror = () => ws?.close();
+
+      ws.onmessage = (event) => {
       const msg = JSON.parse(event.data);
       setDetail((prev) => {
         if (!prev) return prev;
@@ -255,13 +307,33 @@ export default function LiveSessionPage() {
           return { ...prev, focus_violations: [...prev.focus_violations, msg.violation] };
         }
         return prev;
-      });
+        });
+      };
     };
 
-    return () => ws.close();
+    connect();
+
+    // Coming back to the tab is the moment a teacher is most likely to be
+    // looking at a stale screen, so check then too.
+    const onWake = () => {
+      if (document.visibilityState === "visible") void refresh({ quiet: true });
+    };
+    document.addEventListener("visibilitychange", onWake);
+
+    // The safety net. Even with the socket down and every reconnect failing,
+    // the screen can now only be a few seconds behind instead of frozen.
+    const poll = setInterval(() => void refresh({ quiet: true }), 10000);
+
+    return () => {
+      closed = true;
+      clearTimeout(retry);
+      clearInterval(poll);
+      document.removeEventListener("visibilitychange", onWake);
+      ws?.close();
+    };
     // Only reconnect when the session code changes, not on every response.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detail?.session.code]);
+  }, [detail?.session.code, refresh]);
 
   const remaining = useCountdown(
     detail?.session.stage_started_at ?? null,
@@ -297,11 +369,27 @@ export default function LiveSessionPage() {
     }
   }
 
+  /* Start and End used to send the request and ignore the reply, leaving the
+     screen to wait for the socket to tell it what had happened. When the
+     socket was down that never came, so the teacher pressed Start, the class
+     moved, and her own stage chip stayed exactly as it was. The server
+     already returns the updated session; using it means the button is right
+     immediately, whatever the connection is doing. */
+  async function applySession(updated: SessionDetail["session"]) {
+    setDetail((prev) => (prev ? { ...prev, session: { ...prev.session, ...updated } } : prev));
+    // The stage itself, the students' statuses and the response list all move
+    // with it, so take the whole picture rather than guessing at the rest.
+    void refresh({ quiet: true });
+  }
+
   async function handleStartStage() {
     if (!detail) return;
     setStageActionPending(true);
     try {
-      await api.post(`/api/sessions/${detail.session.id}/stage/start`);
+      const updated = await api.post<SessionDetail["session"]>(
+        `/api/sessions/${detail.session.id}/stage/start`,
+      );
+      await applySession(updated);
     } finally {
       setStageActionPending(false);
     }
@@ -311,7 +399,10 @@ export default function LiveSessionPage() {
     if (!detail) return;
     setStageActionPending(true);
     try {
-      await api.post(`/api/sessions/${detail.session.id}/stage/end`);
+      const updated = await api.post<SessionDetail["session"]>(
+        `/api/sessions/${detail.session.id}/stage/end`,
+      );
+      await applySession(updated);
     } finally {
       setStageActionPending(false);
     }
@@ -363,8 +454,13 @@ export default function LiveSessionPage() {
 
   async function handleSetting(patch: Record<string, boolean | number | string>) {
     if (!detail) return;
-    // The WebSocket broadcast updates local state, so don't set it here too.
-    await api.patch(`/api/sessions/${detail.session.id}/settings`, patch);
+    // Apply what the server returns rather than waiting to be told over the
+    // socket, so a tick box responds even when the connection is down.
+    const updated = await api.patch<SessionDetail["session"]>(
+      `/api/sessions/${detail.session.id}/settings`,
+      patch,
+    );
+    setDetail((prev) => (prev ? { ...prev, session: { ...prev.session, ...updated } } : prev));
   }
 
   if (loadError) {
@@ -463,6 +559,17 @@ export default function LiveSessionPage() {
               {SESSION_TYPE_LABELS[session.session_type] ?? session.session_type}
             </span>
           </p>
+          {/* A frozen screen used to look identical to a working one, so a
+              teacher could stand there pressing Start and believe nothing had
+              happened. Say it plainly instead, and say that the lesson itself
+              is unaffected -- because it is: the students have already moved. */}
+          {stale && (
+            <p className="mt-2 inline-flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
+              Live updates reconnecting &mdash; this screen refreshes every few seconds meanwhile. Your
+              lesson and your students are unaffected.
+            </p>
+          )}
         </div>
         {session.status === "active" && (
           <button
