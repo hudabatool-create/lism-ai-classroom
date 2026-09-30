@@ -103,26 +103,62 @@ MARKING A TYPED ANSWER -- a correct answer must never be told it is wrong:
 
   function lismAnswerCorrect(studentText, answerKey, questionText) {
     var norm = function (s) {
-      return String(s || "").toLowerCase().trim().replace(/\s+/g, " ")
+      return String(s == null ? "" : s).toLowerCase().trim().replace(/\s+/g, " ")
         .normalize("NFD").replace(/[̀-ͯ]/g, "");
     };
     var squash = function (s) { return norm(s).replace(/[\s\-.]/g, ""); };
-    var clean = function (s) { return norm(s).replace(/^(a|an|the)\s+/, "").replace(/[.,;:!?]+$/, ""); };
+    // Children answer in sentences, because that is what we teach them to do.
+    var strip = function (s) {
+      return norm(s)
+        .replace(/^(i think|i believe|i know|the answer is|answer|it is called|its called|it is|its|this is|they are called|they are|we call it|it means)\b[:\s]*/, "")
+        .replace(/^(a|an|the)\s+/, "")
+        .replace(/[.,;:!?]+$/, "")
+        .trim();
+    };
+    var esc = function (s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); };
+
     var m = String(questionText || "").match(/(\S+)?\s*_{2,}\s*(\S+)?/);
     var shown = m ? [m[1], m[2]].filter(Boolean).map(function (w) {
       return norm(w).replace(/[.,;:!?]+$/, "");
     }) : [];
-    var given = clean(studentText);
+
+    var given = strip(studentText);
     if (!given) return false;
+    var wordCount = given.split(" ").filter(Boolean).length;
+    // "it is not a packet" contains the right word and means the opposite, so a
+    // sentence that denies something is never accepted on containment alone.
+    var denies = /(^|\s)(not|never|isnt|isn't|arent|aren't|doesnt|doesn't|wasnt|wasn't|no)(\s|$)/.test(given);
+
     return String(answerKey).split("|").map(function (k) { return k.trim(); }).some(function (k) {
-      if (norm(given) === norm(k)) return true;
-      if (squash(given) === squash(k)) return true;
-      var rest = norm(k).split(" ").filter(function (w) { return shown.indexOf(w) === -1; }).join(" ");
-      return !!rest && squash(given) === squash(rest);
+      var key = norm(k);
+      if (!key) return false;
+      if (given === key) return true;
+      if (squash(given) === squash(key)) return true;
+      // Do not demand a word the question already printed beside the blank.
+      var rest = key.split(" ").filter(function (w) { return shown.indexOf(w) === -1; }).join(" ");
+      if (rest && squash(given) === squash(rest)) return true;
+      // A short reply that names the right term inside a sentence.
+      if (wordCount <= 25 && !denies) {
+        if (new RegExp("(^|\\s)" + esc(key) + "(\\s|$)").test(given)) return true;
+        if (rest && new RegExp("(^|\\s)" + esc(rest) + "(\\s|$)").test(given)) return true;
+      }
+      return false;
     });
   }
 
-  Call it as lismAnswerCorrect(whatTheStudentTyped, theAnswerKey, theQuestionSentence), always
+    TWO RULES THAT GO WITH IT, BOTH LEARNED FROM REAL LESSONS:
+    A SENTENCE CONTAINING THE RIGHT TERM IS A RIGHT ANSWER. Children answer in sentences because
+    that is what we spend the year teaching them to do. “It is called a packet.” is correct for the
+    key “packet”. The function above handles this: it strips openings like “the answer is” and
+    “I think”, and for a reply of 25 words or fewer it accepts the key appearing anywhere inside —
+    unless the sentence denies it (“it is not a packet”), which is never accepted on those grounds.
+    A MISSPELLING OF THE RIGHT TERM SCORES FULL MARKS. Say “Correct — check the spelling of
+    [term]” and award the whole mark. Never half. A child who plainly knows the answer and mistypes
+    a letter has made a spelling slip, not a knowledge one, and a half mark for it is a penalty
+    nobody told them about. The teacher can always take a mark off; a mark quietly withheld on
+    thirty screens is never noticed.
+
+Call it as lismAnswerCorrect(whatTheStudentTyped, theAnswerKey, theQuestionSentence), always
   passing the question sentence, and separate accepted spellings with | in the key.
   When in doubt, award the mark and say
   "accepted -- your teacher will review this one". A mark wrongly given can be taken back in
