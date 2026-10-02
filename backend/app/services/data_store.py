@@ -29,6 +29,7 @@ from app.db.base import SessionLocal
 from app.db.models import (
     Activity,
     ActivityAsset,
+    ResponseAttachment,
     EmailVerificationToken,
     FocusViolation,
     PasswordResetToken,
@@ -187,6 +188,10 @@ def _response_dict(row: Response) -> dict:
         "teacher_feedback": row.teacher_feedback,
         "graded_at": row.graded_at,
         "submitted_at": row.submitted_at,
+        # Only whether a drawing exists, never the drawing. The live feed reads
+        # every response in the session, repeatedly; the picture is fetched
+        # when the teacher opens it.
+        "attachment_ids": [a.id for a in row.attachments],
     }
 
 
@@ -831,6 +836,43 @@ class DataStore:
             return [_violation_dict(r) for r in rows]
 
     # --- Responses ---------------------------------------------------
+
+    # Drawings and photographs of handwritten working. A diagram is often the
+    # real answer -- a circuit, a labelled cell, a graph, a map -- and asking a
+    # child to describe one in words marks their writing, not their science.
+    MAX_ATTACHMENT_BYTES = 1_500_000
+
+    def get_response(self, response_id: str) -> dict | None:
+        """One answer, re-read so a freshly attached drawing is included."""
+        with SessionLocal() as db:
+            row = db.get(Response, response_id)
+            return _response_dict(row) if row else None
+
+    def add_attachment(self, response_id: str, session_id: str, content: bytes, media_type: str) -> dict | None:
+        """Attach one image to an answer. Oversized or empty uploads are refused."""
+        if not content or len(content) > self.MAX_ATTACHMENT_BYTES:
+            return None
+        with SessionLocal() as db:
+            row = ResponseAttachment(
+                id=uuid.uuid4().hex,
+                response_id=response_id,
+                session_id=session_id,
+                media_type=media_type if media_type in ("image/png", "image/jpeg", "image/webp") else "image/png",
+                content=content,
+                byte_size=len(content),
+                created_at=_now(),
+            )
+            db.add(row)
+            db.commit()
+            return {"id": row.id, "media_type": row.media_type, "byte_size": row.byte_size}
+
+    def get_attachment(self, attachment_id: str) -> dict | None:
+        """One image, with the session it belongs to so ownership can be checked."""
+        with SessionLocal() as db:
+            row = db.get(ResponseAttachment, attachment_id)
+            if not row:
+                return None
+            return {"id": row.id, "session_id": row.session_id, "media_type": row.media_type, "content": row.content}
 
     def add_response(
         self,

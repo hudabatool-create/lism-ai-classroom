@@ -636,6 +636,49 @@ RULES IT MUST OBEY
     in front of a class when they find out.
 
 Marking as the student submits (mandatory): the moment a DOK response is accepted, mark it against the rubric and show next to that question the rubric level (0–3), the descriptor matched (e.g. “Mostly correct”) and marks earned out of that DOK’s maximum. Mirror every mark into a “Your mark” column in the slide 8 rubric table, update a running total out of 10 live in the rubric header and the navigation bar, and flag criteria still unmarked. Marking basis depends on answer type: correctness against the answer key for numeric, symbolic, chem, short and code (full marks = correct with valid method/units/structure; partial = right method wrong value, or right value wrong units/sig figs; low = attempt only); depth, key-term coverage and reasoning for prose and the prose half of mixed; ticked criteria plus justification for checklist; for draw and image, auto-mark only the labels, caption and reasoning and show “awaiting teacher mark” for the diagram or attachment rather than a guessed score. Label the total “estimated — teacher’s mark is final” and give the teacher a 0/1/2/3 override selector per DOK that recalculates the total.
+A DIAGRAM IS AN ANSWER. OFFER A WAY TO HAND ONE IN (mandatory where the subject needs it).
+If the real answer to a question is a drawing — a circuit, a labelled cell, a graph, a map, a force
+diagram, a flowchart, a geometry construction, handwritten algebra — do not make the child describe it
+in sentences. Describing a diagram marks their writing, not their science.
+Give that question BOTH of these, side by side:
+  A CANVAS to draw on. Mouse, stylus and FINGER — pointer events, not mouse events, or it cannot be used
+    on the tablets half this school teaches with. A visible Clear button. Nothing fancy: one colour and
+    one stroke width is enough, and works first time.
+  A PHOTO button — <input type="file" accept="image/*" capture="environment">. A child who worked it out
+    on paper photographs the paper. On a tablet this opens the camera directly.
+Then, before sending, SHRINK IT: draw the image onto an off-screen canvas no more than 1000px on its
+  longest side and export with canvas.toDataURL('image/jpeg', 0.8). A full-resolution tablet photograph is
+  four megabytes and will be refused; the same photograph shrunk is around a hundred kilobytes and perfectly
+  readable. LISM refuses anything over 1.5 MB, and anything that is not an image.
+SEND IT with the answer, as the `attachment` field of the usual lism:event, alongside the text:
+  reportToLISM(stageId, questionId, null, caption, null, maxMark, dok) with attachment set to that data URL.
+NEVER MARK THE DRAWING. Check only that the canvas is not blank, that the required labels are ticked, and
+  that the caption meets its word count. Report the marks as null and say “Diagram submitted — your teacher
+  marks this one.” No program should score a child's circuit.
+ALWAYS ASK FOR A CAPTION beside the drawing — one or two lines naming what it shows. The caption is what
+  the teacher reads first in the live feed, and it is what makes a wall of thirty drawings navigable.
+
+DOK 3 IS ALWAYS THINK, PAIR, SHARE (mandatory, all three pathways).
+DOK 3 is where a lesson either becomes a conversation or stays thirty children typing in silence. So it is
+built in three beats, in this order, and the student cannot reach the next until the one before is sent:
+  THINK  — the question, and their own first answer, typed and submitted alone. No discussion yet. This is
+    the one that tells the teacher what each child thought before anyone influenced them.
+  PAIR   — on submitting, the box locks and a panel appears: “Now talk to your partner.” Give the pair
+    something specific to do — compare the two answers and find the one thing the other saw that you did
+    not; or agree which of your two reasons is stronger and why. Never just “discuss your answers”. No
+    timer: the teacher paces this from the front, as with everything else.
+  SHARE  — a second box, clearly labelled “After talking, write your answer again”, with a line beneath it
+    reading “Your first answer is saved. This one is your final answer.” Both are reported to LISM: the
+    first with questionId ending -think, the second ending -share, so the teacher sees each child's thinking
+    before and after the conversation.
+MARKING: mark the SHARE answer. The THINK answer is never marked and never scored — it is evidence, not an
+  assessment, and a child who changes their mind after talking has done exactly what was asked of them.
+  Report the think answer with mark null so it reaches the teacher without affecting any total.
+A CHILD WORKING ALONE IS NOT PENALISED. If there is no partner — odd number, absence, a child who would
+  rather not — the share box still accepts an answer and still carries the marks. The pair step is an
+  opportunity, never a requirement, and nothing on screen says otherwise.
+Keep the pairing instruction in the lesson's own language, and name the groups by letter and colour only.
+
 MAIN TASK MARKING RUBRIC (10 marks total): DOK 1 Knowledge/Recall — 3: Correct, uses key terms, 2: Mostly correct, 1: Partial, 0: Blank or gibberish — /2. DOK 2 Skill/Accuracy — 3: Fully correct and explained, 2: Mostly correct, 1: Partial and weak, 0: Blank or gibberish — /3. DOK 3 Application — 3: Clear reasoning, 2: Mostly applied, 1: Partial, 0: Blank or gibberish — /3. DOK 4 Evaluation — 3: Well-justified, 2: Reasonable, 1: Limited, 0: Blank or gibberish — /2. TOTAL — /10.
 Slide 9 — CONNECTION LINK (Recommended Duration: 3 minutes) — TEACHER’S CHOICE: four tabs at the top — “UAE National Identity”, “Moral Education / Values”, “Cross-Curricular Link”, “AI Link”; clicking one reveals that version and hides the others. Generate all four: (1) UAE National Identity — one sentence on how this lesson connects meaningfully to UAE culture, heritage, environment, values or national priorities, followed by three short differentiated criteria: Group C recognises and engages accurately with the UAE context, Group B demonstrates understanding through appropriate application, Group A shows nuanced or implicit understanding of the context and values; (2) Moral Education / Values — which values this lesson develops and HOW, drawn from respect, empathy, integrity, responsibility and collaboration, written as something the student does rather than a list of words; (3) Cross-Curricular Link — one sentence connecting the topic to another school subject, with the reason for the connection rather than just its name; (4) AI Link — one sentence on how AI or emerging technology relates to or is transforming this topic. Each has a short student response box and a 3-option poll that tallies live when clicked. Warm gold or green accent.
 Slide 10 — EXIT TICKET (Recommended Duration: 5 minutes + feedback): 5 short questions testing this lesson’s objectives — fill-in-the-blank for terminology subjects, or 5 quick numeric/symbolic/chem items for maths and science. Each has its own box with profile-appropriate validation. Instruction: “Use at least 1 key term per answer” (or “Show units in every answer” for numeric lessons). Note: “Feedback: teacher reviews exit responses and students may explain their thinking.” Model answers in the locked toggle (unlocks after all 5 are submitted).
@@ -725,7 +768,7 @@ have written the file out in several parts, this is where the parts join and
 that is exactly where the extra bracket goes.
 
 11. SELF-CHECK BEFORE YOU FINISH
-Answer the twenty checks below, by number, in one short line
+Answer the twenty-two checks below, by number, in one short line
 each, as numbers rather than assurances:
 
   1. Submit buttons written: ___  (one per answer box; state both counts)
@@ -747,6 +790,10 @@ each, as numbers rather than assurances:
  17. DOK 1 built as a played game rather than a text box: ___ of 3 pathways (must be 3),
      pairs per pathway: C ___ B ___ A ___, and every tile is a <button>: yes / no
  18. Typed answers compared with anything other than lismAnswerCorrect(): must be 0
+ 19. Questions whose real answer is a diagram: ___, of which offering a canvas AND a photo
+     button: ___ (must be equal), each shrunk before sending and marked null
+ 19. DOK 3 built as think / pair / share: ___ of 3 pathways (must be 3), with the think
+     answer reported at mark null and the share answer carrying the marks: yes / no
  19. Radio/checkbox inputs left at the shared full width: must be 0
  20. Declared marks per stage vs the sum of that stage's question marks: equal / NOT equal
      (state both numbers for every stage that carries marks)

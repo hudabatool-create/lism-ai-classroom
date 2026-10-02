@@ -126,6 +126,35 @@ class Response(Base):
     graded_at: Mapped[str | None] = mapped_column(String, nullable=True)
     submitted_at: Mapped[str] = mapped_column(String, nullable=False)
 
+    # Loaded eagerly only for the ids; the image bytes are never read here.
+    attachments: Mapped[list["ResponseAttachment"]] = relationship(
+        cascade="all, delete-orphan", lazy="selectin"
+    )
+
+
+class ResponseAttachment(Base):
+    """A drawing or a photograph of handwritten working, belonging to one answer.
+
+    Kept in its own table rather than inside the response text for one
+    practical reason: the teacher's live feed and marking screen read every
+    response in the session, and a base64 image inside the answer would be
+    dragged across the network on every poll -- the exact mistake that cost
+    13 GB of database bandwidth in September. Here the feed carries only a
+    note that a drawing exists, and the picture is fetched when the teacher
+    actually opens it.
+    """
+
+    __tablename__ = "response_attachments"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    response_id: Mapped[str] = mapped_column(ForeignKey("responses.id", ondelete="CASCADE"), nullable=False, index=True)
+    session_id: Mapped[str] = mapped_column(ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+    # image/png from a drawing canvas, image/jpeg from a photograph.
+    media_type: Mapped[str] = mapped_column(String, nullable=False, default="image/png")
+    content: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    byte_size: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+
 
 class FocusViolation(Base):
     __tablename__ = "focus_violations"

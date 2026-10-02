@@ -423,6 +423,10 @@ export default function JoinPage() {
       let correct: boolean | null = null;
       let answer = "";
       let mark: number | null = null;
+      // A drawing or a photograph of handwritten working, as a data URL. For
+      // many subjects the real answer is a diagram, and asking a child to
+      // describe one in words marks their writing rather than their science.
+      let attachment: string | undefined;
 
       if (data.type === "lism:event" && data.event === "student_submitted") {
         // `stageId` is the contract, but be generous about the near-misses.
@@ -438,6 +442,10 @@ export default function JoinPage() {
         correct = typeof data.correct === "boolean" ? data.correct : null;
         answer = firstString(data.answer, data.response, data.text) ?? "";
         mark = firstNumber(data.mark, data.marks, data.score);
+        // Named generously, as with stageId above: decks from the same prompt
+        // have called this image, drawing and attachment.
+        const image = firstString(data.attachment, data.image, data.drawing, data.canvas);
+        if (image && image.startsWith("data:image/")) attachment = image;
       } else if (data.type === "lism-activity-response") {
         correct = data.correct ?? null;
         answer = data.answer ?? "";
@@ -454,7 +462,14 @@ export default function JoinPage() {
       if (stageId) activityReportedRef.current.add(stageId);
 
       api
-        .post(`/api/join/${code}/response`, { student_id: studentId, stage_id: stageId, correct, answer, mark })
+        .post(`/api/join/${code}/response`, {
+          student_id: studentId,
+          stage_id: stageId,
+          correct,
+          answer,
+          mark,
+          attachment,
+        })
         .then(() => {
           setSubmittedCount((n) => n + 1);
           setFlash(tr().submitted);

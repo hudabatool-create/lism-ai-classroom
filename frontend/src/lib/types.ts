@@ -129,6 +129,9 @@ export interface ResponseItem {
   answer: string;
   mark: number | null;
   submitted_at: string;
+  /** Drawings or photographs attached to this answer. Ids only -- the images
+   *  are fetched one at a time, so the live feed never carries them. */
+  attachment_ids?: string[];
 }
 
 export type StudentStatusValue = "locked" | "inactive" | "needs_help" | "completed" | "working" | "waiting";

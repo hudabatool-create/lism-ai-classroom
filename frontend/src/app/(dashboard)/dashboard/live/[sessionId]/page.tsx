@@ -1051,6 +1051,29 @@ export default function LiveSessionPage() {
                         This activity reported no answer text &mdash; only whether it was correct.
                       </p>
                     )}
+                    {/* Drawings and photographs of working. The feed carries only
+                        the ids, so each image is fetched when it is shown rather
+                        than travelling with every poll of the response list. */}
+                    {r.attachment_ids?.length ? (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {r.attachment_ids.map((id) => (
+                          <a
+                            key={id}
+                            href={`${api.base}/api/attachments/${id}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            title="Open full size"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={`${api.base}/api/attachments/${id}`}
+                              alt="Student's drawing"
+                              className="max-h-40 rounded-lg border border-slate-200 bg-white dark:border-slate-700"
+                            />
+                          </a>
+                        ))}
+                      </div>
+                    ) : null}
                   </li>
                 );
               })}

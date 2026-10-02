@@ -3,7 +3,7 @@ import io
 import qrcode
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -257,6 +257,12 @@ class ResponseRequest(BaseModel):
     # contains everything sent before and should overwrite it. False when the
     # activity is reporting one more question of its own, which is appended.
     replace: bool = False
+    # A drawing or a photograph of handwritten working, as a data URL. For many
+    # subjects the real answer IS a diagram -- a circuit, a labelled cell, a
+    # graph -- and describing one in words marks the writing, not the science.
+    # Stored separately from the answer text so the teacher's live feed, which
+    # reads every response repeatedly, never carries the image.
+    attachment: str | None = None
 
 
 @router.get("/join/{code}")
@@ -396,10 +402,51 @@ async def submit_response(code: str, payload: ResponseRequest):
         session["id"], payload.student_id, stage_id, payload.correct,
         payload.answer, payload.mark, replace=payload.replace,
     )
+    if payload.attachment:
+        saved = await astore.add_attachment(
+            response["id"], session["id"], *_decode_data_url(payload.attachment)
+        )
+        if saved:
+            # Re-read so the broadcast carries the new attachment id and the
+            # teacher's screen shows the drawing without a refresh.
+            response = await astore.get_response(response["id"]) or response
     await astore.set_needs_help(payload.student_id, False)
     await manager.broadcast(session["code"], {"type": "response_submitted", "response": response}, roles=("teacher",))
     await broadcast_status_update(session, activity)
     return response
+
+
+def _decode_data_url(value: str) -> tuple[bytes, str]:
+    """Pull the bytes out of a data: URL, refusing anything that is not an image."""
+    import base64
+
+    if not value.startswith("data:"):
+        return b"", "image/png"
+    header, _, encoded = value.partition(",")
+    media_type = header[5:].split(";")[0] or "image/png"
+    if not media_type.startswith("image/"):
+        return b"", "image/png"
+    try:
+        return base64.b64decode(encoded, validate=False), media_type
+    except Exception:
+        return b"", media_type
+
+
+@router.get("/attachments/{attachment_id}")
+def get_attachment(attachment_id: str, teacher: dict = Depends(get_current_teacher)):
+    """One student's drawing, for the teacher who owns that lesson and nobody else."""
+    attachment = store.get_attachment(attachment_id)
+    if not attachment:
+        raise HTTPException(status_code=404, detail="Not found")
+    session = store.get_session(attachment["session_id"])
+    if not session or session["teacher_id"] != teacher["id"]:
+        raise HTTPException(status_code=404, detail="Not found")
+    return Response(
+        content=attachment["content"],
+        media_type=attachment["media_type"],
+        # Safe to cache hard: an attachment is written once and never changes.
+        headers={"Cache-Control": "private, max-age=31536000, immutable"},
+    )
 
 
 class FocusViolationRequest(BaseModel):
