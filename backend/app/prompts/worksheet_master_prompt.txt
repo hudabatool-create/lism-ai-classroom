@@ -367,6 +367,17 @@ already shows “Test”. Put every accepted spelling in the key separated by | 
 stay wrong: “Test”, “Alan” and “machine” are all correctly refused for the Turing blank.
 
 
+A SHORT-ANSWER BOX MUST SHOW THE WHOLE ANSWER (mandatory).
+Marking now accepts a sentence that names the right term — “It is called a packet.” is correct for the
+key “packet” — so children write sentences, because that is what we spend the year teaching them to do.
+A single-line <input> then hides most of what they wrote: photographed in a real lesson, a child's correct
+answer was cut off mid-word at the edge of the box, and she could not read back what she had typed.
+So a short-answer box is a <textarea rows="2"> that grows with its content, not an <input type="text">:
+  on input, set style.height = 'auto' then style.height = scrollHeight + 'px', capped at about six lines.
+  Enter submits, Shift+Enter makes a new line — say so in one small line beneath the box.
+  It still marks exactly as before; only the box changes.
+A one-word answer looks no different in a two-row box, so nothing is lost for the child who writes one word.
+
 A RADIO OR CHECKBOX MUST NOT BE STYLED AS A TEXT FIELD (mandatory).
 Answer inputs usually share one class so the script can read them, and that class sets width:100%.
 A radio button carrying it stretches to the full width of its row, so the little circle sits in the
