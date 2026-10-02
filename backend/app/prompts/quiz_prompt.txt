@@ -108,8 +108,16 @@ MARKING A TYPED ANSWER -- a correct answer must never be told it is wrong:
     };
     var squash = function (s) { return norm(s).replace(/[\s\-.]/g, ""); };
     // Children answer in sentences, because that is what we teach them to do.
+    // A child writing a code keyword wraps it the way code is written: `else`,
+    // "else", 'else'. All three were marked wrong. Brackets are deliberately NOT
+    // stripped -- print() and (x+1) are answers in their own right.
+    var unwrap = function (s) {
+      return String(s == null ? "" : s)
+        .replace(/^[\s"'`‘’“”]+/, "")
+        .replace(/[\s"'`‘’“”]+$/, "");
+    };
     var strip = function (s) {
-      return norm(s)
+      return norm(unwrap(s))
         .replace(/^(i think|i believe|i know|the answer is|answer|it is called|its called|it is|its|this is|they are called|they are|we call it|it means)\b[:\s]*/, "")
         .replace(/^(a|an|the)\s+/, "")
         .replace(/[.,;:!?]+$/, "")
