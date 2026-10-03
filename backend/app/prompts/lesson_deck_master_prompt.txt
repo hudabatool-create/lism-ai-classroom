@@ -563,11 +563,32 @@ BUILD IT IN THE FILE: inline SVG, CSS or canvas only — never a linked image, n
 RELIABILITY BEATS AMBITION: if a genuinely interactive version cannot be built so that it works first time in one self-contained file, build the simpler version that definitely works. A diagram that works teaches more than a simulation that does not load, and the teacher will be standing in front of a class when they find out.
 Slide 6 — PROGRESS CHECK (Recommended Duration: 2 minutes, no marks): ONE question that tells the teacher, in under a minute, whether the class understood the teaching well enough to work independently. Not a quiz — a single hinge question on the one idea the Main Activity depends on. Use multiple choice (4 options) or true/false with a one-line reason box, so it marks itself instantly and the whole class's answers reach the teacher at once. Write the distractors so each wrong option reveals a specific, named misconception — the point is to show the teacher WHICH misunderstanding is in the room, not merely how many got it wrong. On accept, show the student whether they were right and one sentence of explanation; do NOT lock the next slide behind it. THIS SECTION CARRIES NO MARKS AND MUST NOT COUNT TOWARDS THE LESSON TOTAL OF 20 — set marks:null in the manifest. It is formative: a student who has not understood must feel safe saying so, and a mark here would make guessing the safer move and hide the very thing the teacher needs to see.
 Slides 7–8 — MAIN ACTIVITY (Recommended Duration: 10 minutes + feedback, 10 marks): the student first chooses their pathway — Group C, Group B or Group A — and then works through that pathway’s DOK 1 Recall (2 marks), DOK 2 Skill (3 marks), DOK 3 Application (3 marks) and DOK 4 Evaluation (2 marks) questions, then — once all four are accepted — a single Challenge / Extension Task written for that pathway. Generate all three pathways and all three challenge tasks in full, as specified in Section 7b: Select Pathway → DOK 1 → DOK 2 → DOK 3 → DOK 4 → one final Challenge Task. Choose the answer type per question — typically short/numeric for DOK 1, numeric/symbolic/code/draw/mixed for DOK 2, mixed for DOK 3, prose for DOK 4 — and where the subject’s real answer is a diagram, graph, circuit, map or handwritten working, use draw or image (or mixed with an explanation beside it) rather than forcing a written description. Instruction: “Answers must include at least 2 key terms” (for prose parts; for numeric/symbolic parts require correct method or units instead, and say so on screen). Note: “Feedback: teacher gives feedback on responses and students may defend their work.” Slide 8 shows the rubric.
-DOK 1 IS ALWAYS PLAYED, NEVER TYPED (mandatory).
+DOK 1 IS ALWAYS PLAYED, NEVER TYPED — AND NOT ALWAYS THE SAME GAME (mandatory).
 Four text boxes in a row is the same lesson four times, and by the third one the class has stopped
-thinking and started producing sentences. So the DOK 1 Recall question, in ALL THREE pathways, is a
-tap-to-match game — not a text box. It carries DOK 1’s 2 marks exactly as a typed answer would, marks
-itself, locks on submit and reports to LISM identically. Nothing else about the structure changes.
+thinking and started producing sentences. So the DOK 1 Recall question, in ALL THREE pathways, is
+played rather than typed. It carries DOK 1’s 2 marks exactly as a typed answer would, marks itself,
+locks on submit and reports to LISM identically. Nothing else about the structure changes.
+
+CHOOSE THE GAME THAT FITS THE CONTENT, NOT THE SAME ONE EVERY TIME. A child who meets the identical
+matching game in every lesson for a term is no longer playing; she is filling in a form with a nicer
+border. Pick from these by what the recall actually IS:
+  MATCH THE PAIRS      — vocabulary: a term and what it means, a symbol and its name, a word and its
+                         translation, a formula and what it calculates.
+  PUT IT IN ORDER      — anything sequential: steps of a method, events on a timeline, lines of an
+                         algorithm, stages of a cycle, a sentence rebuilt from its clauses.
+  SORT INTO GROUPS     — classification: drop each example under the right heading. The headings are
+                         the lesson’s categories and the examples are the judgement.
+  ODD ONE OUT          — a set where one does not belong, and the student says which and why in four
+                         words. Good when the category boundary is the learning.
+  SPOT THE MISTAKE     — a worked solution, sentence, circuit or line of code with one planted error.
+                         Good when the misconception is the point.
+  BUILD IT FROM PARTS  — assemble an equation, a sentence, a balanced reaction, a labelled diagram
+                         from pieces supplied.
+  TRUE OR FALSE SORT   — a row of statements dragged into two columns, each with a one-line reason.
+Ordering suits a process. Sorting suits a classification. Matching suits vocabulary. Spot the mistake
+suits a misconception. Choose on that basis, and STATE IN ONE LINE at the end of the file which form
+you chose and why — if the honest answer is “matching, because this lesson is vocabulary”, that is a
+good answer; always reaching for matching because it is easiest to build is not.
 Beyond that, at least one of DOK 2–3 should also be solved by doing where the subject allows, and so
 should the Challenge Task at the end.
 
@@ -594,9 +615,10 @@ DIFFERENTIATE BY HOW CONFUSABLE THE MEANINGS ARE, not by how many words they con
     question: “identifies WHERE a device is” against “the lookup that turns a name into that
     address”; “forwards it one hop closer” against “returned by the receiver, never by a router”.
     Group A should have to read carefully rather than pattern-match.
-If matching genuinely does not fit the topic, the DOK 1 game may instead be sorting into groups or
-putting items in order — but it is still played, still in all three pathways, and still obeys every
-rule below.
+Whichever form is chosen, it is still played, still in all three pathways, and still obeys every rule
+below. The build described above is written for matching; the same rules transfer directly — buttons
+rather than divs, tap before drag, a wrong move that bounces back and says why, free retries, and the
+mark being how much of the board was finished.
 
 IT MUST TEACH THE OBJECTIVE, NOT DECORATE IT. The test: could a student win it without
 understanding today’s learning objective? If yes, it is a toy — rebuild it. The thing being dragged,
@@ -728,6 +750,31 @@ So whatever class the inputs share, add this immediately after the rule that set
 and check it: every option row must read as circle, then letter, then text, hard against the left.
 
 
+GIVE EACH LESSON ITS OWN COLOUR, WITHOUT MOVING THE FURNITURE (mandatory).
+A student who meets the identical colour scheme every lesson of every week stops seeing it. But the
+colours that MEAN something must never move, because students learn them:
+  NEVER CHANGE: the DOK badges (DOK1 green, DOK2 blue, DOK3 amber, DOK4 red) and the pathway colours
+    (Group C green, Group B yellow, Group A blue). These are a code, not decoration. A student who has
+    learned that amber means DOK 3 must be able to rely on it in every lesson, in every subject.
+  NEVER CHANGE: where anything sits. The section order, the reference bar at the bottom, the position
+    of Submit, the navigation. A child should never have to re-learn where things are.
+CHOOSE A FRESH ACCENT for the lesson: the heading colour, the rule under each section title, the title
+  slide, the active navigation dot, the submit buttons. Pick a palette that suits the TOPIC rather than
+  cycling at random — ocean blues and sea-greens for the water cycle, warm earth tones for a lesson on
+  soil or on Emirati heritage, deep indigo and violet for space, terracotta and sand for ancient
+  history, forest greens for ecosystems. Say in one line at the end of the file which accent you chose
+  and why.
+RULES THE ACCENT MUST OBEY:
+  Contrast at least 4.5:1 against its background, checked, not guessed. A pretty palette a child cannot
+    read is worse than a plain one.
+  It must not collide with the code above: no green, amber, blue or red accent strong enough to be
+    mistaken for a DOK badge or a pathway colour. Teal, indigo, violet, terracotta, slate and plum are
+    all safe; a bright primary green is not.
+  Backgrounds stay light and calm. Text stays near-black. The accent is for headings, rules and
+    buttons — never a wash of colour behind a paragraph a child has to read.
+  One accent per lesson, used consistently. Not a different colour on every slide, which is noise
+    rather than variety.
+
 9. DESIGN RULES
 One consistent colour scheme; DOK badges colour coded (DOK1 green, DOK2 blue, DOK3 amber, DOK4 red); persistent reference bar on every slide; minimal text with large smart-board fonts; the recommended duration shown beside every section title and no timer or countdown of any kind; model answers only inside locked collapsible toggles; smooth transitions; responsive full-screen layout with no overlapping elements; strong colour contrast and colour never the only signal (pair each objective colour with the word Group C/B/A and each DOK colour with its number); completion summary at the end.
 
@@ -787,7 +834,7 @@ have written the file out in several parts, this is where the parts join and
 that is exactly where the extra bracket goes.
 
 11. SELF-CHECK BEFORE YOU FINISH
-Answer the twenty-two checks below, by number, in one short line
+Answer the twenty-four checks below, by number, in one short line
 each, as numbers rather than assurances:
 
   1. Submit buttons written: ___  (one per answer box; state both counts)
@@ -806,17 +853,21 @@ each, as numbers rather than assurances:
  14. Rubric criteria in the manifest: ___, of which objective: ___ and teacher-marked: ___
  15. Waiting/curtain screens this file draws itself: must be 0
  16. Approvals or saves promised that LISM cannot deliver: must be 0
- 17. DOK 1 built as a played game rather than a text box: ___ of 3 pathways (must be 3),
-     pairs per pathway: C ___ B ___ A ___, and every tile is a <button>: yes / no
- 18. Typed answers compared with anything other than lismAnswerCorrect(): must be 0
- 19. Short-answer boxes that are a single-line <input> rather than a growing textarea:
+ 17. Accent colour chosen for this lesson: ___________ and why: ___________,
+     contrast ratio against its background: ___ (must be 4.5 or more), and DOK/pathway
+     colours left untouched: yes / no
+ 18. DOK 1 built as a played game rather than a text box: ___ of 3 pathways (must be 3),
+     the form chosen: ___________ and why in one line: ___________,
+     items per pathway: C ___ B ___ A ___, and every tile is a <button>: yes / no
+ 19. Typed answers compared with anything other than lismAnswerCorrect(): must be 0
+ 20. Short-answer boxes that are a single-line <input> rather than a growing textarea:
      must be 0
- 19. Questions whose real answer is a diagram: ___, of which offering a canvas AND a photo
+ 21. Questions whose real answer is a diagram: ___, of which offering a canvas AND a photo
      button: ___ (must be equal), each shrunk before sending and marked null
- 19. DOK 3 built as think / pair / share: ___ of 3 pathways (must be 3), with the think
+ 22. DOK 3 built as think / pair / share: ___ of 3 pathways (must be 3), with the think
      answer reported at mark null and the share answer carrying the marks: yes / no
- 19. Radio/checkbox inputs left at the shared full width: must be 0
- 20. Declared marks per stage vs the sum of that stage's question marks: equal / NOT equal
+ 23. Radio/checkbox inputs left at the shared full width: must be 0
+ 24. Declared marks per stage vs the sum of that stage's question marks: equal / NOT equal
      (state both numbers for every stage that carries marks)
 
 If any answer is short of what the rule requires, say so in one line rather
